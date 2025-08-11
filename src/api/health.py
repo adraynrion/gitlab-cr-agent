@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 
 from src.config.settings import settings
+from src.exceptions import GitLabAPIException
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -42,26 +43,47 @@ async def readiness_check() -> Dict[str, Any]:
                 headers={"PRIVATE-TOKEN": settings.gitlab_token}
             )
             if response.status_code == 200:
-                checks["gitlab"] = {"status": "healthy", "response_time": response.elapsed.total_seconds()}
+                checks["gitlab"] = {
+                    "status": "healthy", 
+                    "response_time": response.elapsed.total_seconds() if response.elapsed else 0
+                }
             else:
-                checks["gitlab"] = {"status": "unhealthy", "error": f"HTTP {response.status_code}"}
+                checks["gitlab"] = {
+                    "status": "unhealthy", 
+                    "error": f"HTTP {response.status_code}",
+                    "details": response.text[:200] if hasattr(response, 'text') else None
+                }
                 all_healthy = False
+    except httpx.RequestError as e:
+        logger.warning(f"GitLab health check failed - network error: {e}")
+        checks["gitlab"] = {"status": "unhealthy", "error": f"Network error: {str(e)}"}
+        all_healthy = False
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"GitLab health check failed - HTTP error: {e}")
+        checks["gitlab"] = {"status": "unhealthy", "error": f"HTTP {e.response.status_code}: {e.response.text[:100]}"}
+        all_healthy = False
     except Exception as e:
-        checks["gitlab"] = {"status": "unhealthy", "error": str(e)}
+        logger.error(f"GitLab health check failed - unexpected error: {e}")
+        checks["gitlab"] = {"status": "unhealthy", "error": f"Unexpected error: {str(e)}"}
         all_healthy = False
     
     # Check AI model configuration
-    if settings.ai_model.startswith("openai:") and not settings.openai_api_key:
-        checks["ai_model"] = {"status": "unhealthy", "error": "OpenAI API key not configured"}
+    try:
+        from src.agents.providers import get_llm_model
+        model = get_llm_model(settings.ai_model)
+        checks["ai_model"] = {
+            "status": "healthy", 
+            "model": settings.ai_model,
+            "provider_type": type(model).__name__
+        }
+    except Exception as e:
+        logger.warning(f"AI model configuration check failed: {e}")
+        checks["ai_model"] = {
+            "status": "unhealthy", 
+            "error": str(e),
+            "model": settings.ai_model
+        }
         all_healthy = False
-    elif settings.ai_model.startswith("anthropic:") and not settings.anthropic_api_key:
-        checks["ai_model"] = {"status": "unhealthy", "error": "Anthropic API key not configured"}
-        all_healthy = False
-    elif settings.ai_model.startswith("gemini:") and not settings.google_api_key:
-        checks["ai_model"] = {"status": "unhealthy", "error": "Google API key not configured"}
-        all_healthy = False
-    else:
-        checks["ai_model"] = {"status": "healthy", "model": settings.ai_model}
     
     status_code = 200 if all_healthy else 503
     

@@ -18,8 +18,12 @@ pydantic-settings>=2.5.2
 python-dotenv>=1.0.0
 
 # Async support
-asyncio==3.4.3
 aiofiles==23.2.1
+
+# Security
+slowapi>=0.1.7
+secure>=0.3.0
+tenacity>=8.2.0
 
 # Monitoring and logging
 structlog==24.1.0

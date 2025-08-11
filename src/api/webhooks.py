@@ -2,30 +2,68 @@
 GitLab webhook handlers for merge request events
 """
 
-from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks, Depends
 from typing import Dict, Any
 import logging
 import hmac
 import hashlib
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from src.models.gitlab_models import GitLabWebhookPayload, MergeRequestEvent
 from src.services.gitlab_service import GitLabService
 from src.services.review_service import ReviewService
 from src.config.settings import settings
+from src.exceptions import (
+    WebhookValidationException,
+    SecurityException,
+    ReviewProcessException
+)
+from src.agents.code_reviewer import CodeReviewAgent
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-def verify_gitlab_token(request: Request) -> bool:
+# Rate limiter for webhooks
+limiter = Limiter(
+    key_func=get_remote_address,
+    enabled=settings.rate_limit_enabled
+)
+
+def verify_gitlab_token(request: Request):
     """Verify GitLab webhook secret token"""
     gitlab_token = request.headers.get("X-Gitlab-Token", "")
     
     if not settings.gitlab_webhook_secret:
+        logger.warning("GitLab webhook secret not configured - accepting all webhooks")
         return True  # Skip verification if no secret configured
     
-    return hmac.compare_digest(gitlab_token, settings.gitlab_webhook_secret)
+    if not gitlab_token:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "Missing webhook token",
+                "message": "X-Gitlab-Token header is required",
+                "type": "authentication_error"
+            }
+        )
+    
+    is_valid = hmac.compare_digest(gitlab_token, settings.gitlab_webhook_secret)
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "Invalid webhook token", 
+                "message": "Invalid X-Gitlab-Token provided",
+                "type": "authentication_error"
+            }
+        )
+    
+    return True
 
 @router.post("/gitlab")
+@limiter.limit(settings.webhook_rate_limit)
 async def handle_gitlab_webhook(
     request: Request,
     background_tasks: BackgroundTasks
@@ -37,17 +75,26 @@ async def handle_gitlab_webhook(
     """
     
     # Verify webhook authentication
-    if not verify_gitlab_token(request):
-        logger.warning("Invalid GitLab webhook token received")
-        raise HTTPException(status_code=401, detail="Invalid webhook token")
+    # Since verify_gitlab_token now raises HTTPException directly, we don't need try/catch
+    verify_gitlab_token(request)
     
     # Parse webhook payload
     try:
         payload = await request.json()
         webhook_event = GitLabWebhookPayload(**payload)
+    except ValueError as e:
+        logger.error(f"JSON parsing failed: {e}")
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
     except Exception as e:
-        logger.error(f"Failed to parse webhook payload: {e}")
-        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+        logger.error(f"Webhook payload validation failed: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Invalid webhook payload",
+                "message": "Webhook payload validation failed",
+                "type": "validation_error"
+            }
+        )
     
     # Handle merge request events
     if webhook_event.object_kind != "merge_request":
@@ -77,7 +124,8 @@ async def handle_gitlab_webhook(
     
     background_tasks.add_task(
         process_merge_request_review,
-        mr_event
+        mr_event,
+        None  # review_agent will be initialized in the background task
     )
     
     return {
@@ -86,13 +134,23 @@ async def handle_gitlab_webhook(
         "project_id": mr_event.project.id
     }
 
-async def process_merge_request_review(mr_event: MergeRequestEvent):
+async def process_merge_request_review(
+    mr_event: MergeRequestEvent, 
+    review_agent: CodeReviewAgent = None
+):
     """
     Background task to process merge request review
     """
     try:
+        # Initialize services - create fresh instances for background task
         gitlab_service = GitLabService()
-        review_service = ReviewService()
+        
+        # Initialize review agent if not provided
+        if review_agent is None:
+            from src.agents.code_reviewer import initialize_review_agent
+            review_agent = await initialize_review_agent()
+            
+        review_service = ReviewService(review_agent=review_agent)
         
         # Fetch merge request details and diff
         mr_details = await gitlab_service.get_merge_request(
@@ -130,10 +188,19 @@ async def process_merge_request_review(mr_event: MergeRequestEvent):
         try:
             error_comment = f"❌ **AI Code Review Failed**\n\nAn error occurred during the review process. Please check the logs for details."
             
+            gitlab_service = GitLabService()
             await gitlab_service.post_merge_request_comment(
                 project_id=mr_event.project.id,
                 mr_iid=mr_event.object_attributes.iid,
                 comment=error_comment
             )
-        except:
-            pass  # Fail silently if we can't post the error comment
+        except Exception as comment_error:
+            logger.error(
+                f"Failed to post error comment to GitLab MR {mr_event.object_attributes.iid}: {comment_error}",
+                extra={
+                    "project_id": mr_event.project.id,
+                    "mr_iid": mr_event.object_attributes.iid,
+                    "original_error": str(e),
+                    "comment_error": str(comment_error)
+                }
+            )

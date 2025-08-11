@@ -7,12 +7,14 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 from dataclasses import dataclass
 import logging
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from src.models.review_models import (
     CodeIssue, ReviewResult, ReviewContext
 )
 from src.agents.providers import get_llm_model
 from src.config.settings import settings
+from src.exceptions import AIProviderException, ReviewProcessException
 
 logger = logging.getLogger(__name__)
 
@@ -143,12 +145,17 @@ class CodeReviewAgent:
             
             return "Consider refactoring for better readability and maintainability"
     
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=30),
+        retry=retry_if_exception_type((Exception,))  # Retry on most exceptions
+    )
     async def review_merge_request(
         self,
         diff_content: str,
         context: ReviewContext
     ) -> ReviewResult:
-        """Perform comprehensive code review on merge request"""
+        """Perform comprehensive code review on merge request with retry logic"""
         
         logger.info(f"Starting review for MR {context.merge_request_iid}")
         
@@ -187,15 +194,42 @@ class CodeReviewAgent:
             result = await self.agent.run(review_prompt, deps=deps)
             
             # Log token usage for monitoring
-            usage = result.usage()
-            logger.info(f"Review completed. Tokens used: {usage.total_tokens}")
+            if hasattr(result, 'usage'):
+                usage = result.usage()
+                logger.info(f"Review completed. Tokens used: {usage.total_tokens if hasattr(usage, 'total_tokens') else 'unknown'}")
             
+            # Validate result has expected output
+            if not hasattr(result, 'output'):
+                raise AIProviderException(
+                    message="AI provider returned unexpected result structure",
+                    provider=self.model_name,
+                    details={"result_type": type(result).__name__}
+                )
+                
             return result.output
                 
+        except AIProviderException:
+            # Don't wrap AI provider exceptions
+            raise
         except Exception as e:
             logger.error(f"Review failed for MR {context.merge_request_iid}: {e}")
-            raise
+            raise ReviewProcessException(
+                message=f"Review process failed for MR {context.merge_request_iid}",
+                merge_request_iid=context.merge_request_iid,
+                details={"model_name": self.model_name},
+                original_error=e
+            )
 
 async def initialize_review_agent() -> CodeReviewAgent:
     """Factory function to initialize the review agent"""
-    return CodeReviewAgent(model_name=settings.ai_model)
+    try:
+        agent = CodeReviewAgent(model_name=settings.ai_model)
+        logger.info(f"Review agent initialized successfully with model: {settings.ai_model}")
+        return agent
+    except Exception as e:
+        logger.error(f"Failed to initialize review agent: {e}")
+        raise ReviewProcessException(
+            message="Failed to initialize AI review agent",
+            details={"model_name": settings.ai_model},
+            original_error=e
+        )

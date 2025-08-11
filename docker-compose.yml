@@ -21,14 +21,6 @@ services:
       - ai-reviewer
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    networks:
-      - ai-reviewer
-    restart: unless-stopped
-
 networks:
   ai-reviewer:
     driver: bridge

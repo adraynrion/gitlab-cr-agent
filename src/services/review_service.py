@@ -10,6 +10,7 @@ from src.agents.code_reviewer import CodeReviewAgent
 from src.models.review_models import ReviewResult, ReviewContext, CodeIssue
 from src.models.gitlab_models import MergeRequestEvent
 from src.services.gitlab_service import GitLabService
+from src.exceptions import ReviewProcessException, GitLabAPIException, AIProviderException
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +81,17 @@ class ReviewService:
             logger.info(f"Review completed for MR {mr_event.object_attributes.iid}")
             return review_result
             
-        except Exception as e:
-            logger.error(f"Review orchestration failed for MR {mr_event.object_attributes.iid}: {e}")
+        except (GitLabAPIException, AIProviderException) as e:
+            logger.error(f"Review orchestration failed for MR {mr_event.object_attributes.iid}: {e.message}")
             raise
+        except Exception as e:
+            logger.error(f"Unexpected error in review orchestration for MR {mr_event.object_attributes.iid}: {e}")
+            raise ReviewProcessException(
+                message=f"Review orchestration failed for MR {mr_event.object_attributes.iid}",
+                merge_request_iid=mr_event.object_attributes.iid,
+                project_id=mr_event.project.id,
+                original_error=e
+            )
     
     def _format_diff_content(self, mr_diff: List[Dict[str, Any]]) -> str:
         """
