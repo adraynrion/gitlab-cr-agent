@@ -341,6 +341,12 @@ black src/ tests/
 # Lint code
 flake8 src/ tests/
 
+# Remove unused imports and variables (dry run)
+autoflake --remove-all-unused-imports --remove-unused-variables --check --recursive src/ tests/
+
+# Remove unused imports and variables (in place)
+autoflake --remove-all-unused-imports --remove-unused-variables --in-place --recursive src/ tests/
+
 # Type check
 mypy src/
 

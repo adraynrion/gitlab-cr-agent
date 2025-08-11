@@ -3,15 +3,17 @@ PydanticAI-based code review agent with multi-LLM support
 """
 
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 from dataclasses import dataclass
 import logging
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-
-from src.models.review_models import (
-    CodeIssue, ReviewResult, ReviewContext
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
 )
+
+from src.models.review_models import ReviewResult, ReviewContext
 from src.agents.providers import get_llm_model
 from src.config.settings import settings
 from src.exceptions import AIProviderException, ReviewProcessException
@@ -45,9 +47,11 @@ TONE:
 - Provide clear rationale for suggestions
 """
 
+
 @dataclass
 class ReviewDependencies:
     """Dependencies for code review operations"""
+
     repository_url: str
     branch: str
     merge_request_iid: int
@@ -56,79 +60,74 @@ class ReviewDependencies:
     file_changes: List[Dict[str, Any]]
     review_trigger_tag: str
 
+
 class CodeReviewAgent:
     """Main code review agent using PydanticAI"""
-    
-    def __init__(self, model_name: str = None):
+
+    def __init__(self, model_name: Optional[str] = None):
         """Initialize the review agent with specified model"""
         self.model_name = model_name or settings.ai_model
         self.model = get_llm_model(self.model_name)
-        
+
         # Create PydanticAI agent
         self.agent = Agent(
             model=self.model,
             output_type=ReviewResult,
             deps_type=ReviewDependencies,
             system_prompt=CODE_REVIEW_SYSTEM_PROMPT,
-            retries=settings.ai_retries
+            retries=settings.ai_retries,
         )
-        
+
         # Register tools
         self._register_tools()
-        
+
         logger.info(f"Initialized CodeReviewAgent with model: {self.model_name}")
-    
+
     def _register_tools(self):
         """Register agent tools for enhanced analysis"""
-        
+
         @self.agent.tool
         async def analyze_security_patterns(
-            ctx: RunContext[ReviewDependencies],
-            code_snippet: str
+            ctx: RunContext[ReviewDependencies], code_snippet: str
         ) -> str:
             """Analyze code for common security vulnerabilities"""
-            security_checks = [
-                "SQL injection risks",
-                "XSS vulnerabilities", 
-                "Authentication bypass",
-                "Insecure cryptography",
-                "Sensitive data exposure",
-                "Input validation issues"
-            ]
-            
+            # Security check categories for analysis
             findings = []
             # Simplified security analysis (would be more sophisticated in production)
             if "eval(" in code_snippet or "exec(" in code_snippet:
                 findings.append("Dangerous use of eval/exec - potential code injection")
             if "password" in code_snippet.lower() and "plain" in code_snippet.lower():
                 findings.append("Potential plaintext password storage")
-            
+
             return f"Security analysis complete. Findings: {', '.join(findings) if findings else 'No issues detected'}"
-        
+
         @self.agent.tool
         async def check_code_complexity(
-            ctx: RunContext[ReviewDependencies],
-            function_code: str
+            ctx: RunContext[ReviewDependencies], function_code: str
         ) -> Dict[str, Any]:
             """Calculate cyclomatic complexity and other metrics"""
             # Simplified complexity calculation
-            lines = function_code.split('\n')
+            lines = function_code.split("\n")
             complexity_score = 1  # Base complexity
-            
+
             for line in lines:
-                if any(keyword in line for keyword in ['if ', 'elif ', 'for ', 'while ', 'except']):
+                if any(
+                    keyword in line
+                    for keyword in ["if ", "elif ", "for ", "while ", "except"]
+                ):
                     complexity_score += 1
-            
+
             return {
                 "cyclomatic_complexity": complexity_score,
                 "lines_of_code": len(lines),
-                "recommendation": "Consider refactoring" if complexity_score > 10 else "Acceptable complexity"
+                "recommendation": "Consider refactoring"
+                if complexity_score > 10
+                else "Acceptable complexity",
             }
-        
-        @self.agent.tool  
+
+        @self.agent.tool
         async def suggest_improvements(
-            ctx: RunContext[ReviewDependencies],
-            issue_description: str
+            ctx: RunContext[ReviewDependencies], issue_description: str
         ) -> str:
             """Generate specific improvement suggestions"""
             # Context-aware suggestions based on the issue
@@ -136,29 +135,27 @@ class CodeReviewAgent:
                 "error handling": "Add try-except blocks with specific exception types",
                 "type hints": "Add type annotations for function parameters and return values",
                 "documentation": "Add docstrings following Google or NumPy style",
-                "testing": "Create unit tests covering edge cases and error conditions"
+                "testing": "Create unit tests covering edge cases and error conditions",
             }
-            
+
             for keyword, suggestion in suggestions_map.items():
                 if keyword in issue_description.lower():
                     return suggestion
-            
+
             return "Consider refactoring for better readability and maintainability"
-    
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=30),
-        retry=retry_if_exception_type((Exception,))  # Retry on most exceptions
+        retry=retry_if_exception_type((Exception,)),  # Retry on most exceptions
     )
     async def review_merge_request(
-        self,
-        diff_content: str,
-        context: ReviewContext
+        self, diff_content: str, context: ReviewContext
     ) -> ReviewResult:
         """Perform comprehensive code review on merge request with retry logic"""
-        
+
         logger.info(f"Starting review for MR {context.merge_request_iid}")
-        
+
         # Prepare dependencies
         deps = ReviewDependencies(
             repository_url=context.repository_url,
@@ -167,20 +164,20 @@ class CodeReviewAgent:
             gitlab_token=settings.gitlab_token,
             diff_content=diff_content,
             file_changes=context.file_changes,
-            review_trigger_tag=context.trigger_tag
+            review_trigger_tag=context.trigger_tag,
         )
-        
+
         # Construct review prompt
         review_prompt = f"""
         Please review the following code changes from a GitLab merge request.
-        
+
         Repository: {context.repository_url}
         Target Branch: {context.target_branch}
         Source Branch: {context.source_branch}
-        
+
         DIFF CONTENT:
         {diff_content}
-        
+
         Provide a comprehensive review focusing on:
         1. Critical issues that must be fixed
         2. Security vulnerabilities
@@ -188,26 +185,28 @@ class CodeReviewAgent:
         4. Code quality and maintainability
         5. Positive aspects worth highlighting
         """
-        
         try:
             # Run the review agent
             result = await self.agent.run(review_prompt, deps=deps)
-            
+
             # Log token usage for monitoring
-            if hasattr(result, 'usage'):
+            if hasattr(result, "usage"):
                 usage = result.usage()
-                logger.info(f"Review completed. Tokens used: {usage.total_tokens if hasattr(usage, 'total_tokens') else 'unknown'}")
-            
+                logger.info(
+                    f"Review completed. Tokens used: {usage.total_tokens if hasattr(usage, 'total_tokens') else 'unknown'}"
+                )
+
             # Validate result has expected output
-            if not hasattr(result, 'output'):
+            if not hasattr(result, "output"):
                 raise AIProviderException(
                     message="AI provider returned unexpected result structure",
                     provider=self.model_name,
-                    details={"result_type": type(result).__name__}
+                    details={"result_type": type(result).__name__},
                 )
-                
-            return result.output
-                
+
+            # The output should be a ReviewResult from PydanticAI
+            return result.output  # type: ignore[return-value]
+
         except AIProviderException:
             # Don't wrap AI provider exceptions
             raise
@@ -217,19 +216,22 @@ class CodeReviewAgent:
                 message=f"Review process failed for MR {context.merge_request_iid}",
                 merge_request_iid=context.merge_request_iid,
                 details={"model_name": self.model_name},
-                original_error=e
+                original_error=e,
             )
+
 
 async def initialize_review_agent() -> CodeReviewAgent:
     """Factory function to initialize the review agent"""
     try:
         agent = CodeReviewAgent(model_name=settings.ai_model)
-        logger.info(f"Review agent initialized successfully with model: {settings.ai_model}")
+        logger.info(
+            f"Review agent initialized successfully with model: {settings.ai_model}"
+        )
         return agent
     except Exception as e:
         logger.error(f"Failed to initialize review agent: {e}")
         raise ReviewProcessException(
             message="Failed to initialize AI review agent",
             details={"model_name": settings.ai_model},
-            original_error=e
+            original_error=e,
         )

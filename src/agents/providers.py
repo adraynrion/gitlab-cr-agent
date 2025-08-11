@@ -4,7 +4,7 @@ Multi-LLM provider configuration for PydanticAI
 
 import os
 import logging
-from typing import Optional, Union
+from typing import Optional, List, Union, Any
 from pydantic_ai.models import Model
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.anthropic import AnthropicModel
@@ -19,6 +19,7 @@ from src.exceptions import AIProviderException, ConfigurationException
 
 logger = logging.getLogger(__name__)
 
+
 def get_openai_model() -> OpenAIModel:
     """Configure OpenAI model with proper error handling"""
     try:
@@ -27,11 +28,11 @@ def get_openai_model() -> OpenAIModel:
             return OpenAIModel(settings.openai_model_name, provider=provider)
         else:
             # Use environment variable (OPENAI_API_KEY)
-            if not os.getenv('OPENAI_API_KEY'):
+            if not os.getenv("OPENAI_API_KEY"):
                 raise ConfigurationException(
                     message="OpenAI API key not found",
                     config_key="openai_api_key",
-                    details={"model_name": settings.openai_model_name}
+                    details={"model_name": settings.openai_model_name},
                 )
             return OpenAIModel(settings.openai_model_name)
     except Exception as e:
@@ -40,8 +41,9 @@ def get_openai_model() -> OpenAIModel:
             message="Failed to initialize OpenAI model",
             provider="openai",
             model=settings.openai_model_name,
-            original_error=e
+            original_error=e,
         )
+
 
 def get_anthropic_model() -> AnthropicModel:
     """Configure Anthropic Claude model with proper error handling"""
@@ -51,21 +53,22 @@ def get_anthropic_model() -> AnthropicModel:
             return AnthropicModel(settings.anthropic_model_name, provider=provider)
         else:
             # Use environment variable (ANTHROPIC_API_KEY)
-            if not os.getenv('ANTHROPIC_API_KEY'):
+            if not os.getenv("ANTHROPIC_API_KEY"):
                 raise ConfigurationException(
                     message="Anthropic API key not found",
                     config_key="anthropic_api_key",
-                    details={"model_name": settings.anthropic_model_name}
+                    details={"model_name": settings.anthropic_model_name},
                 )
             return AnthropicModel(settings.anthropic_model_name)
     except Exception as e:
         logger.error(f"Failed to initialize Anthropic model: {e}")
         raise AIProviderException(
             message="Failed to initialize Anthropic model",
-            provider="anthropic", 
+            provider="anthropic",
             model=settings.anthropic_model_name,
-            original_error=e
+            original_error=e,
         )
+
 
 def get_google_model() -> GoogleModel:
     """Configure Google Gemini model with proper error handling"""
@@ -75,11 +78,11 @@ def get_google_model() -> GoogleModel:
             return GoogleModel(settings.gemini_model_name, provider=provider)
         else:
             # Use environment variable (GOOGLE_API_KEY or GEMINI_API_KEY)
-            if not (os.getenv('GOOGLE_API_KEY') or os.getenv('GEMINI_API_KEY')):
+            if not (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
                 raise ConfigurationException(
                     message="Google API key not found",
                     config_key="google_api_key",
-                    details={"model_name": settings.gemini_model_name}
+                    details={"model_name": settings.gemini_model_name},
                 )
             return GoogleModel(settings.gemini_model_name)
     except Exception as e:
@@ -88,21 +91,22 @@ def get_google_model() -> GoogleModel:
             message="Failed to initialize Google model",
             provider="google",
             model=settings.gemini_model_name,
-            original_error=e
+            original_error=e,
         )
 
-def get_llm_model(model_name: str = None) -> Union[Model, FallbackModel]:
+
+def get_llm_model(model_name: Optional[str] = None) -> Union[Model, FallbackModel]:
     """
     Get configured LLM model based on settings
-    
+
     Args:
         model_name: Override model selection
-        
+
     Returns:
         Configured PydanticAI model
     """
     model_name = model_name or settings.ai_model
-    
+
     # Single model configuration
     if model_name.startswith("openai:"):
         return get_openai_model()
@@ -110,27 +114,27 @@ def get_llm_model(model_name: str = None) -> Union[Model, FallbackModel]:
         return get_anthropic_model()
     elif model_name.startswith("gemini:"):
         return get_google_model()
-    
+
     # Fallback configuration for multiple providers
     elif model_name == "fallback":
-        models = []
-        
+        models: List[Union[Model, Any]] = []
+
         if settings.openai_api_key:
             models.append(get_openai_model())
         if settings.anthropic_api_key:
             models.append(get_anthropic_model())
         if settings.google_api_key:
             models.append(get_google_model())
-        
+
         if not models:
             raise ConfigurationException(
                 message="No LLM providers configured for fallback model",
                 config_key="ai_model",
-                details={"requested_model": model_name}
+                details={"requested_model": model_name},
             )
-        
+
         return FallbackModel(models)
-    
+
     else:
         logger.warning(f"Unknown model name '{model_name}', defaulting to OpenAI")
         # Default to OpenAI

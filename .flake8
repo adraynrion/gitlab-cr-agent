@@ -1,0 +1,30 @@
+[flake8]
+# Configuration for flake8 linting
+
+# Maximum line length (ignore E501)
+max-line-length = 120
+ignore = E501
+
+# Exclude common directories
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    .env,
+    build,
+    dist,
+    *.egg-info,
+    .pytest_cache,
+    .mypy_cache
+
+# File patterns to check
+filename = *.py
+
+# Enable additional checks
+select = E,W,F,C
+
+# Per-file ignores (if needed in the future)
+per-file-ignores =
+    # Example: __init__.py files can have unused imports
+    # __init__.py:F401
