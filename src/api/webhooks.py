@@ -57,7 +57,8 @@ async def handle_gitlab_webhook(
     
     # Check if the trigger tag is present
     trigger_tag = settings.gitlab_trigger_tag
-    if trigger_tag not in mr_event.object_attributes.labels:
+    label_titles = [label.title for label in mr_event.object_attributes.labels]
+    if trigger_tag not in label_titles:
         return {
             "status": "ignored",
             "reason": f"Trigger tag '{trigger_tag}' not found"

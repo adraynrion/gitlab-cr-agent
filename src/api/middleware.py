@@ -20,8 +20,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Skip auth for health checks and root endpoint
-        if request.url.path in ["/", "/health/live", "/health/ready"]:
+        # Skip auth for health checks, root endpoint, and webhook endpoints
+        public_paths = ["/", "/health/live", "/health/ready", "/webhook/gitlab"]
+        if request.url.path in public_paths:
             return await call_next(request)
         
         # Skip auth if no API key is configured

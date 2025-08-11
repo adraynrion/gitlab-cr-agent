@@ -43,12 +43,23 @@ class ReviewService:
             diff_content = self._format_diff_content(mr_diff)
             
             # Create review context
+            # Extract trigger tag from labels (find the first matching trigger tag)
+            trigger_tag = "ai-review"  # default
+            if mr_event.object_attributes.labels:
+                # Use the first label's title as trigger tag, or find the specific trigger tag
+                label_titles = [label.title for label in mr_event.object_attributes.labels]
+                from src.config.settings import settings
+                if settings.gitlab_trigger_tag in label_titles:
+                    trigger_tag = settings.gitlab_trigger_tag
+                else:
+                    trigger_tag = label_titles[0]  # fallback to first label
+            
             context = ReviewContext(
                 repository_url=mr_event.project.web_url,
                 merge_request_iid=mr_event.object_attributes.iid,
                 source_branch=mr_event.object_attributes.source_branch,
                 target_branch=mr_event.object_attributes.target_branch,
-                trigger_tag=mr_event.object_attributes.labels[0] if mr_event.object_attributes.labels else "ai-review",
+                trigger_tag=trigger_tag,
                 file_changes=mr_diff
             )
             

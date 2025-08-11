@@ -65,7 +65,7 @@ class CodeReviewAgent:
         # Create PydanticAI agent
         self.agent = Agent(
             model=self.model,
-            result_type=ReviewResult,
+            output_type=ReviewResult,
             deps_type=ReviewDependencies,
             system_prompt=CODE_REVIEW_SYSTEM_PROMPT,
             retries=settings.ai_retries
@@ -184,14 +184,13 @@ class CodeReviewAgent:
         
         try:
             # Run the review agent
-            async with self.agent.run(review_prompt, deps=deps) as result:
-                review_result = result.data
-                
-                # Log token usage for monitoring
-                usage = result.usage()
-                logger.info(f"Review completed. Tokens used: {usage.total_tokens}")
-                
-                return review_result
+            result = await self.agent.run(review_prompt, deps=deps)
+            
+            # Log token usage for monitoring
+            usage = result.usage()
+            logger.info(f"Review completed. Tokens used: {usage.total_tokens}")
+            
+            return result.output
                 
         except Exception as e:
             logger.error(f"Review failed for MR {context.merge_request_iid}: {e}")

@@ -9,35 +9,38 @@ from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.models.fallback import FallbackModel
+from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.providers.anthropic import AnthropicProvider
+from pydantic_ai.providers.google import GoogleProvider
 
 from src.config.settings import settings
 
 def get_openai_model() -> OpenAIModel:
     """Configure OpenAI model"""
-    return OpenAIModel(
-        settings.openai_model_name,
-        api_key=settings.openai_api_key,
-        temperature=settings.ai_temperature,
-        max_tokens=settings.ai_max_tokens
-    )
+    if settings.openai_api_key:
+        provider = OpenAIProvider(api_key=settings.openai_api_key)
+        return OpenAIModel(settings.openai_model_name, provider=provider)
+    else:
+        # Use environment variable (OPENAI_API_KEY)
+        return OpenAIModel(settings.openai_model_name)
 
 def get_anthropic_model() -> AnthropicModel:
     """Configure Anthropic Claude model"""
-    return AnthropicModel(
-        settings.anthropic_model_name,
-        api_key=settings.anthropic_api_key,
-        temperature=settings.ai_temperature,
-        max_tokens=settings.ai_max_tokens
-    )
+    if settings.anthropic_api_key:
+        provider = AnthropicProvider(api_key=settings.anthropic_api_key)
+        return AnthropicModel(settings.anthropic_model_name, provider=provider)
+    else:
+        # Use environment variable (ANTHROPIC_API_KEY)
+        return AnthropicModel(settings.anthropic_model_name)
 
 def get_google_model() -> GoogleModel:
     """Configure Google Gemini model"""
-    return GoogleModel(
-        settings.gemini_model_name,
-        api_key=settings.google_api_key,
-        temperature=settings.ai_temperature,
-        max_tokens=settings.ai_max_tokens
-    )
+    if settings.google_api_key:
+        provider = GoogleProvider(api_key=settings.google_api_key)
+        return GoogleModel(settings.gemini_model_name, provider=provider)
+    else:
+        # Use environment variable (GOOGLE_API_KEY or GEMINI_API_KEY)
+        return GoogleModel(settings.gemini_model_name)
 
 def get_llm_model(model_name: str = None) -> Union[Model, FallbackModel]:
     """
