@@ -55,14 +55,17 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: Optional[str] = Field(default=None)
     openai_model_name: str = Field(default="gpt-4o")
+    openai_base_url: Optional[str] = Field(default=None)
 
     # Anthropic Configuration
     anthropic_api_key: Optional[str] = Field(default=None)
     anthropic_model_name: str = Field(default="claude-3-5-sonnet-latest")
+    anthropic_base_url: Optional[str] = Field(default=None)
 
     # Google Configuration
     google_api_key: Optional[str] = Field(default=None)
     gemini_model_name: str = Field(default="gemini-1.5-pro")
+    google_base_url: Optional[str] = Field(default=None)
 
     # Security
     allowed_origins: List[str] = Field(
