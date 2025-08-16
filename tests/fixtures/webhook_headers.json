@@ -1,0 +1,117 @@
+{
+  "valid_headers": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "test-webhook-secret",
+    "X-Gitlab-Timestamp": "1705312800.0",
+    "User-Agent": "GitLab/16.7.0-pre"
+  },
+  "valid_headers_with_current_timestamp": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "test-webhook-secret",
+    "X-Gitlab-Timestamp": "current_time",
+    "User-Agent": "GitLab/16.7.0-pre"
+  },
+  "headers_with_old_timestamp": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "test-webhook-secret",
+    "X-Gitlab-Timestamp": "1705312400.0",
+    "User-Agent": "GitLab/16.7.0-pre",
+    "_comment": "Timestamp is 400 seconds (6+ minutes) old"
+  },
+  "headers_with_future_timestamp": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "test-webhook-secret",
+    "X-Gitlab-Timestamp": "1705313200.0",
+    "User-Agent": "GitLab/16.7.0-pre",
+    "_comment": "Timestamp is 400 seconds (6+ minutes) in future"
+  },
+  "headers_missing_timestamp": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "test-webhook-secret",
+    "User-Agent": "GitLab/16.7.0-pre"
+  },
+  "headers_invalid_timestamp": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "test-webhook-secret",
+    "X-Gitlab-Timestamp": "not-a-number",
+    "User-Agent": "GitLab/16.7.0-pre"
+  },
+  "headers_missing_token": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Timestamp": "1705312800.0",
+    "User-Agent": "GitLab/16.7.0-pre"
+  },
+  "headers_invalid_token": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "invalid-token",
+    "X-Gitlab-Timestamp": "1705312800.0",
+    "User-Agent": "GitLab/16.7.0-pre"
+  },
+  "headers_empty_token": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "",
+    "X-Gitlab-Timestamp": "1705312800.0",
+    "User-Agent": "GitLab/16.7.0-pre"
+  },
+  "headers_security_test": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "secure-webhook-secret-12345",
+    "X-Gitlab-Timestamp": "current_time",
+    "User-Agent": "GitLab/16.7.0-pre",
+    "X-Forwarded-For": "192.168.1.100",
+    "X-Real-IP": "192.168.1.100"
+  },
+  "headers_performance_test": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "test-webhook-secret",
+    "X-Gitlab-Timestamp": "current_time",
+    "User-Agent": "GitLab/16.7.0-pre",
+    "Content-Length": "2048",
+    "X-Request-ID": "performance-test-12345"
+  },
+  "headers_replay_attack_test": {
+    "Content-Type": "application/json",
+    "X-Gitlab-Event": "Merge Request Hook",
+    "X-Gitlab-Token": "test-webhook-secret",
+    "X-Gitlab-Timestamp": "1705310000.0",
+    "User-Agent": "GitLab/16.7.0-pre",
+    "_comment": "Old timestamp for replay attack testing"
+  },
+  "headers_edge_cases": {
+    "timestamp_boundary_valid": {
+      "Content-Type": "application/json",
+      "X-Gitlab-Event": "Merge Request Hook",
+      "X-Gitlab-Token": "test-webhook-secret",
+      "X-Gitlab-Timestamp": "boundary_time",
+      "User-Agent": "GitLab/16.7.0-pre",
+      "_comment": "Exactly at 5-minute boundary"
+    },
+    "timestamp_boundary_invalid": {
+      "Content-Type": "application/json",
+      "X-Gitlab-Event": "Merge Request Hook",
+      "X-Gitlab-Token": "test-webhook-secret", 
+      "X-Gitlab-Timestamp": "boundary_time_plus_one",
+      "User-Agent": "GitLab/16.7.0-pre",
+      "_comment": "One second over 5-minute boundary"
+    },
+    "high_precision_timestamp": {
+      "Content-Type": "application/json",
+      "X-Gitlab-Event": "Merge Request Hook",
+      "X-Gitlab-Token": "test-webhook-secret",
+      "X-Gitlab-Timestamp": "1705312800.123456",
+      "User-Agent": "GitLab/16.7.0-pre",
+      "_comment": "Microsecond precision timestamp"
+    }
+  }
+}

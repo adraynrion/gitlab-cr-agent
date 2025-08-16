@@ -1,0 +1,146 @@
+# Test configuration scenarios for the GitLab Code Review Agent
+
+# Valid minimal configuration
+minimal_config:
+  gitlab_token: "glpat-xxxxxxxxxxxxxxxxxxxx"
+  gitlab_url: "https://gitlab.example.com"
+  gitlab_webhook_secret: "secret123"
+  review_provider: "openai"
+  openai_api_key: "sk-xxxxxxxxxxxxxxxxxxxx"
+
+# Full configuration with all features
+full_config:
+  # GitLab settings
+  gitlab_token: "glpat-xxxxxxxxxxxxxxxxxxxx"
+  gitlab_url: "https://gitlab.example.com"
+  gitlab_webhook_secret: "very-secret-token"
+  
+  # Provider settings
+  review_provider: "openai"
+  review_model: "gpt-4"
+  review_max_tokens: 3000
+  review_temperature: 0.3
+  
+  # All provider keys
+  openai_api_key: "sk-xxxxxxxxxxxxxxxxxxxx"
+  anthropic_api_key: "sk-ant-xxxxxxxxxxxxxxxxxxxx"
+  azure_openai_api_key: "azure-key-xxxxxxxxxxxxxxxxxxxx"
+  azure_openai_endpoint: "https://myazure.openai.azure.com"
+  azure_openai_deployment: "gpt-4-deployment"
+  gemini_api_key: "gemini-xxxxxxxxxxxxxxxxxxxx"
+  ollama_base_url: "http://localhost:11434"
+  ollama_model: "codellama"
+  
+  # Review settings
+  review_skip_draft: true
+  review_skip_wip: true
+  review_file_extensions:
+    - ".py"
+    - ".js"
+    - ".ts"
+    - ".go"
+    - ".java"
+  review_ignore_patterns:
+    - "**/test_*.py"
+    - "**/__pycache__/**"
+    - "**/node_modules/**"
+    - "**/.git/**"
+  review_max_files: 100
+  review_max_lines: 2000
+  
+  # Security settings
+  auth_enabled: true
+  auth_token: "bearer-token-xxxxxxxxxxxxxxxxxxxx"
+  allowed_users:
+    - "user1"
+    - "user2"
+    - "admin"
+  allowed_groups:
+    - "developers"
+    - "reviewers"
+  
+  # Rate limiting
+  rate_limit_requests: 200
+  rate_limit_period: 60
+  
+  # CORS settings
+  cors_origins:
+    - "http://localhost:3000"
+    - "https://gitlab.example.com"
+    - "https://app.example.com"
+  
+  # Logging
+  log_level: "DEBUG"
+
+# Invalid configuration - missing required fields
+invalid_missing_token:
+  gitlab_url: "https://gitlab.example.com"
+  gitlab_webhook_secret: "secret"
+  review_provider: "openai"
+
+# Invalid configuration - wrong provider
+invalid_provider:
+  gitlab_token: "token"
+  gitlab_url: "https://gitlab.example.com"
+  gitlab_webhook_secret: "secret"
+  review_provider: "unsupported_provider"
+  
+# Configuration with custom endpoint
+custom_endpoint_config:
+  gitlab_token: "token"
+  gitlab_url: "https://custom-gitlab.company.com"
+  gitlab_webhook_secret: "secret"
+  review_provider: "azure"
+  azure_openai_api_key: "key"
+  azure_openai_endpoint: "https://custom.openai.azure.com"
+  azure_openai_deployment: "custom-deployment"
+  azure_openai_api_version: "2024-02-15-preview"
+
+# High security configuration
+high_security_config:
+  gitlab_token: "token"
+  gitlab_url: "https://gitlab.example.com"
+  gitlab_webhook_secret: "ultra-secure-secret-with-high-entropy"
+  review_provider: "openai"
+  openai_api_key: "key"
+  auth_enabled: true
+  auth_token: "secure-bearer-token"
+  allowed_users:
+    - "trusted_user_1"
+  allowed_groups:
+    - "security_team"
+  rate_limit_requests: 10
+  rate_limit_period: 60
+  cors_origins:
+    - "https://gitlab.example.com"
+  log_level: "WARNING"
+
+# Development configuration
+dev_config:
+  gitlab_token: "dev-token"
+  gitlab_url: "http://localhost:8080"
+  gitlab_webhook_secret: "dev-secret"
+  review_provider: "ollama"
+  ollama_base_url: "http://localhost:11434"
+  ollama_model: "codellama"
+  auth_enabled: false
+  rate_limit_requests: 1000
+  rate_limit_period: 1
+  cors_origins:
+    - "*"
+  log_level: "DEBUG"
+
+# Multi-provider fallback configuration
+multi_provider_config:
+  gitlab_token: "token"
+  gitlab_url: "https://gitlab.example.com"
+  gitlab_webhook_secret: "secret"
+  review_provider: "openai"
+  review_provider_fallback:
+    - "anthropic"
+    - "gemini"
+    - "ollama"
+  openai_api_key: "key1"
+  anthropic_api_key: "key2"
+  gemini_api_key: "key3"
+  ollama_base_url: "http://localhost:11434"

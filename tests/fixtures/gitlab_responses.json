@@ -1,0 +1,197 @@
+{
+  "merge_request": {
+    "id": 1,
+    "iid": 10,
+    "project_id": 100,
+    "title": "Add new feature",
+    "description": "This MR adds a new feature",
+    "state": "opened",
+    "created_at": "2024-01-15T10:00:00Z",
+    "updated_at": "2024-01-15T10:00:00Z",
+    "merge_status": "can_be_merged",
+    "draft": false,
+    "work_in_progress": false,
+    "source_branch": "feature-branch",
+    "target_branch": "main",
+    "author": {
+      "id": 1,
+      "username": "testuser",
+      "name": "Test User",
+      "email": "test@example.com",
+      "state": "active",
+      "avatar_url": "https://example.com/avatar.jpg"
+    },
+    "assignee": null,
+    "assignees": [],
+    "source_project_id": 100,
+    "target_project_id": 100,
+    "labels": [],
+    "sha": "abc123def456",
+    "merge_commit_sha": null,
+    "user_notes_count": 0,
+    "discussion_locked": null,
+    "should_remove_source_branch": null,
+    "force_remove_source_branch": false,
+    "web_url": "https://gitlab.example.com/test-group/test-project/-/merge_requests/10",
+    "reference": "!10",
+    "references": {
+      "short": "!10",
+      "relative": "!10",
+      "full": "test-group/test-project!10"
+    }
+  },
+  "merge_request_changes": {
+    "id": 1,
+    "iid": 10,
+    "project_id": 100,
+    "title": "Add new feature",
+    "state": "opened",
+    "created_at": "2024-01-15T10:00:00Z",
+    "updated_at": "2024-01-15T10:00:00Z",
+    "changes": [
+      {
+        "old_path": "src/main.py",
+        "new_path": "src/main.py",
+        "a_mode": "100644",
+        "b_mode": "100644",
+        "new_file": false,
+        "renamed_file": false,
+        "deleted_file": false,
+        "diff": "@@ -10,6 +10,8 @@ class Calculator:\n     def add(self, a, b):\n         return a + b\n \n+    def subtract(self, a, b):\n+        return a - b\n+\n     def multiply(self, a, b):\n         return a * b\n"
+      },
+      {
+        "old_path": "tests/test_main.py",
+        "new_path": "tests/test_main.py",
+        "a_mode": "100644",
+        "b_mode": "100644",
+        "new_file": false,
+        "renamed_file": false,
+        "deleted_file": false,
+        "diff": "@@ -5,3 +5,7 @@ def test_add():\n     calc = Calculator()\n     assert calc.add(2, 3) == 5\n+\n+def test_subtract():\n+    calc = Calculator()\n+    assert calc.subtract(5, 3) == 2\n"
+      },
+      {
+        "old_path": "docs/readme.md",
+        "new_path": "docs/readme.md",
+        "a_mode": "100644",
+        "b_mode": "100644",
+        "new_file": true,
+        "renamed_file": false,
+        "deleted_file": false,
+        "diff": "+# Calculator Project\n+\n+A simple calculator implementation.\n"
+      }
+    ]
+  },
+  "merge_request_comment": {
+    "id": 123,
+    "type": "DiffNote",
+    "body": "Code review comment",
+    "attachment": null,
+    "author": {
+      "id": 2,
+      "username": "reviewer",
+      "name": "Reviewer",
+      "state": "active",
+      "avatar_url": "https://example.com/reviewer.jpg"
+    },
+    "created_at": "2024-01-15T11:00:00Z",
+    "updated_at": "2024-01-15T11:00:00Z",
+    "system": false,
+    "noteable_id": 1,
+    "noteable_type": "MergeRequest",
+    "position": {
+      "base_sha": "abc123",
+      "start_sha": "def456",
+      "head_sha": "ghi789",
+      "old_path": "src/main.py",
+      "new_path": "src/main.py",
+      "old_line": null,
+      "new_line": 12
+    },
+    "resolvable": true,
+    "resolved": false
+  },
+  "user_info": {
+    "id": 1,
+    "username": "testuser",
+    "email": "test@example.com",
+    "name": "Test User",
+    "state": "active",
+    "avatar_url": "https://example.com/avatar.jpg",
+    "web_url": "https://gitlab.example.com/testuser",
+    "created_at": "2023-01-01T00:00:00Z",
+    "bio": "Test user bio",
+    "location": "Test Location",
+    "public_email": "test@example.com",
+    "skype": "",
+    "linkedin": "",
+    "twitter": "",
+    "website_url": "",
+    "organization": "Test Org",
+    "is_admin": false,
+    "can_create_group": true,
+    "can_create_project": true,
+    "two_factor_enabled": true,
+    "external": false
+  },
+  "project_info": {
+    "id": 100,
+    "description": "Test project description",
+    "name": "test-project",
+    "name_with_namespace": "Test Group / test-project",
+    "path": "test-project",
+    "path_with_namespace": "test-group/test-project",
+    "created_at": "2023-06-01T00:00:00Z",
+    "default_branch": "main",
+    "tag_list": [],
+    "ssh_url_to_repo": "git@gitlab.example.com:test-group/test-project.git",
+    "http_url_to_repo": "https://gitlab.example.com/test-group/test-project.git",
+    "web_url": "https://gitlab.example.com/test-group/test-project",
+    "readme_url": "https://gitlab.example.com/test-group/test-project/-/blob/main/README.md",
+    "avatar_url": null,
+    "star_count": 10,
+    "forks_count": 2,
+    "last_activity_at": "2024-01-15T10:00:00Z",
+    "namespace": {
+      "id": 50,
+      "name": "Test Group",
+      "path": "test-group",
+      "kind": "group",
+      "full_path": "test-group",
+      "parent_id": null,
+      "avatar_url": null,
+      "web_url": "https://gitlab.example.com/groups/test-group"
+    }
+  },
+  "project_members": [
+    {
+      "id": 1,
+      "username": "testuser",
+      "name": "Test User",
+      "state": "active",
+      "avatar_url": "https://example.com/avatar.jpg",
+      "web_url": "https://gitlab.example.com/testuser",
+      "access_level": 40,
+      "expires_at": null
+    },
+    {
+      "id": 2,
+      "username": "reviewer",
+      "name": "Reviewer",
+      "state": "active",
+      "avatar_url": "https://example.com/reviewer.jpg",
+      "web_url": "https://gitlab.example.com/reviewer",
+      "access_level": 30,
+      "expires_at": null
+    }
+  ],
+  "error_response": {
+    "message": "404 Project Not Found"
+  },
+  "unauthorized_response": {
+    "message": "401 Unauthorized"
+  },
+  "rate_limit_response": {
+    "message": "429 Too Many Requests",
+    "retry_after": 60
+  }
+}
