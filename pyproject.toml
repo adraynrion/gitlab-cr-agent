@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gitlab-ai-reviewer"
-version = "2.5.0"
+version = "2.5.1"
 description = "AI-powered code review automation for GitLab using PydanticAI"
 authors = [
     {name = "Adraynrion", email = "adraynrion@pm.me"}
@@ -45,7 +45,6 @@ dependencies = [
     "slowapi>=0.1.7",
     "secure>=0.3.0",
     "tenacity>=8.2.0",
-    "pybreaker>=1.0.2",
     "cryptography>=41.0.0",
     # Monitoring and logging
     "structlog==24.1.0",
