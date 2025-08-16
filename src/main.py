@@ -18,13 +18,21 @@ from fastapi.responses import JSONResponse
 
 from src.agents.code_reviewer import initialize_review_agent
 from src.api import health, webhooks
-from src.api.middleware import (AuthenticationMiddleware, LoggingMiddleware,
-                                SecurityMiddleware)
+from src.api.middleware import (
+    AuthenticationMiddleware,
+    RequestTracingMiddleware,
+    SecurityMiddleware,
+)
 from src.config.settings import settings
-from src.exceptions import (AIProviderException, ConfigurationException,
-                            GitLabAPIException, GitLabReviewerException,
-                            RateLimitException, SecurityException,
-                            WebhookValidationException)
+from src.exceptions import (
+    AIProviderException,
+    ConfigurationException,
+    GitLabAPIException,
+    GitLabReviewerException,
+    RateLimitException,
+    SecurityException,
+    WebhookValidationException,
+)
 from src.utils.version import get_version
 
 # Configure structured logging
@@ -42,34 +50,43 @@ class AppState:
     review_agent: Optional[Any] = None
     initialized: bool = False
     shutdown_event: Optional[asyncio.Event] = None
-    _lock: threading.Lock = None
+    _lock: Optional[threading.Lock] = None
 
     def __post_init__(self):
         """Initialize thread-safe lock after dataclass creation"""
         if self._lock is None:
-            self._lock = threading.Lock()
+            object.__setattr__(self, "_lock", threading.Lock())
         if self.shutdown_event is None:
-            self.shutdown_event = asyncio.Event()
+            object.__setattr__(self, "shutdown_event", asyncio.Event())
 
     def mark_initialized(self, agent: Any) -> None:
         """Thread-safe method to mark application as initialized"""
-        with self._lock:
-            self.review_agent = agent
-            self.initialized = True
+        if self._lock:
+            with self._lock:
+                self.review_agent = agent
+                self.initialized = True
 
     def get_review_agent(self) -> Optional[Any]:
         """Thread-safe method to get review agent"""
-        with self._lock:
-            return self.review_agent
+        if self._lock:
+            with self._lock:
+                return self.review_agent
+        return self.review_agent
 
     def is_initialized(self) -> bool:
         """Thread-safe method to check initialization status"""
-        with self._lock:
-            return self.initialized
+        if self._lock:
+            with self._lock:
+                return self.initialized
+        return self.initialized
 
     def clear(self) -> None:
         """Thread-safe method to clear application state"""
-        with self._lock:
+        if self._lock:
+            with self._lock:
+                self.review_agent = None
+                self.initialized = False
+        else:
             self.review_agent = None
             self.initialized = False
 
@@ -83,7 +100,8 @@ def setup_signal_handlers():
 
     def signal_handler(signum, frame):
         logger.info(f"Received signal {signum}, initiating graceful shutdown")
-        app_state.shutdown_event.set()
+        if app_state.shutdown_event:
+            app_state.shutdown_event.set()
 
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
@@ -129,6 +147,12 @@ async def cleanup_resources():
         # Clear app state
         app_state.clear()
 
+        # Clear secrets cache for security
+        from src.utils.secrets import clear_secrets_cache
+
+        clear_secrets_cache()
+        logger.info("Secrets cache cleared")
+
         logger.info("Resource cleanup complete")
 
     except Exception as e:
@@ -151,7 +175,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down GitLab AI Reviewer")
-    app_state.shutdown_event.set()
+    if app_state.shutdown_event:
+        app_state.shutdown_event.set()
     await cleanup_resources()
     logger.info("Graceful shutdown complete")
 
@@ -417,7 +442,7 @@ else:
 # Add custom middleware (order matters!)
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(AuthenticationMiddleware)
-app.add_middleware(LoggingMiddleware)
+app.add_middleware(RequestTracingMiddleware)
 
 # Include routers
 app.include_router(webhooks.router, prefix="/webhook", tags=["webhooks"])

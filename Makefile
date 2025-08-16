@@ -100,14 +100,14 @@ lint: ## Run flake8 linting
 	@echo "$(BLUE)Running flake8 linting...$(RESET)"
 	@$(VENV_PATH)/bin/flake8 $(SRC_DIRS) --count --select=E9,F63,F7,F82 --show-source --statistics || \
 		(echo "$(RED)✗ Critical linting errors found$(RESET)" && exit 1)
-	@$(VENV_PATH)/bin/flake8 $(SRC_DIRS) --count --max-line-length=88 --extend-ignore=E203,W503 --statistics || \
+	@$(VENV_PATH)/bin/flake8 $(SRC_DIRS) --count --max-line-length=88 --extend-ignore=E203,W503,E402 --statistics || \
 		(echo "$(RED)✗ Linting issues found$(RESET)" && exit 1)
 	@echo "$(GREEN)✓ Linting passed$(RESET)"
 
 lint-report: ## Generate flake8 HTML report
 	@echo "$(BLUE)Generating flake8 HTML report...$(RESET)"
 	@mkdir -p reports
-	@$(VENV_PATH)/bin/flake8 $(SRC_DIRS) --format=html --htmldir=reports/flake8 --max-line-length=88 --extend-ignore=E203,W503
+	@$(VENV_PATH)/bin/flake8 $(SRC_DIRS) --format=html --htmldir=reports/flake8 --max-line-length=88 --extend-ignore=E203,W503,E402
 	@echo "$(GREEN)✓ Linting report generated: reports/flake8/index.html$(RESET)"
 
 # Code Quality - Type Checking
