@@ -2,18 +2,20 @@
 GitLab webhook handlers for merge request events
 """
 
-from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
-from typing import Optional
-import logging
 import hmac
+import logging
+import time
+from typing import Optional
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from src.agents.code_reviewer import CodeReviewAgent
+from src.config.settings import settings
 from src.models.gitlab_models import GitLabWebhookPayload, MergeRequestEvent
 from src.services.gitlab_service import GitLabService
 from src.services.review_service import ReviewService
-from src.config.settings import settings
-from src.agents.code_reviewer import CodeReviewAgent
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -23,8 +25,9 @@ limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabl
 
 
 def verify_gitlab_token(request: Request):
-    """Verify GitLab webhook secret token"""
+    """Verify GitLab webhook secret token with timestamp validation for replay protection"""
     gitlab_token = request.headers.get("X-Gitlab-Token", "")
+    timestamp = request.headers.get("X-Gitlab-Timestamp")
 
     if not settings.gitlab_webhook_secret:
         logger.warning("GitLab webhook secret not configured - accepting all webhooks")
@@ -39,6 +42,37 @@ def verify_gitlab_token(request: Request):
                 "type": "authentication_error",
             },
         )
+
+    # Validate timestamp to prevent replay attacks
+    if timestamp:
+        try:
+            webhook_time = float(timestamp)
+            current_time = time.time()
+            time_diff = abs(current_time - webhook_time)
+            
+            # Allow 5 minutes tolerance for webhook delivery delays
+            if time_diff > 300:  # 5 minutes in seconds
+                logger.warning(
+                    f"Webhook timestamp too old: {time_diff}s difference from current time"
+                )
+                raise HTTPException(
+                    status_code=401,
+                    detail={
+                        "error": "Webhook timestamp expired",
+                        "message": "Webhook timestamp is too old (>5 minutes)",
+                        "type": "replay_protection_error",
+                    },
+                )
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid webhook timestamp format: {timestamp}")
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error": "Invalid webhook timestamp",
+                    "message": "X-Gitlab-Timestamp header must be a valid Unix timestamp",
+                    "type": "authentication_error",
+                },
+            )
 
     is_valid = hmac.compare_digest(gitlab_token, settings.gitlab_webhook_secret)
 

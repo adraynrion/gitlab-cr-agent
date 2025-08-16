@@ -2,18 +2,16 @@
 Review service for orchestrating code reviews
 """
 
-from typing import Dict, Any, List, Optional
 import logging
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from src.agents.code_reviewer import CodeReviewAgent
-from src.models.review_models import ReviewResult, CodeIssue, ReviewContext
+from src.config.settings import settings
+from src.exceptions import (AIProviderException, GitLabAPIException,
+                            ReviewProcessException)
 from src.models.gitlab_models import MergeRequestEvent
-from src.exceptions import (
-    ReviewProcessException,
-    GitLabAPIException,
-    AIProviderException,
-)
+from src.models.review_models import CodeIssue, ReviewContext, ReviewResult
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +55,6 @@ class ReviewService:
                 label_titles = [
                     label.title for label in mr_event.object_attributes.labels
                 ]
-                from src.config.settings import settings
 
                 if settings.gitlab_trigger_tag in label_titles:
                     trigger_tag = settings.gitlab_trigger_tag
@@ -109,16 +106,42 @@ class ReviewService:
 
     def _format_diff_content(self, mr_diff: List[Dict[str, Any]]) -> str:
         """
-        Format GitLab diff data into readable text format
+        Format GitLab diff data into readable text format with size validation
 
         Args:
             mr_diff: Raw GitLab diff data
 
         Returns:
             Formatted diff string
-        """
-        formatted_diff = []
 
+        Raises:
+            ReviewProcessException: If diff content exceeds maximum allowed size
+        """
+        # Calculate total size before processing to prevent memory issues
+        total_size = 0
+        for diff_item in mr_diff:
+            if diff_item.get("diff"):
+                total_size += len(str(diff_item["diff"]))
+                total_size += len(str(diff_item.get("old_path", "")))
+                total_size += len(str(diff_item.get("new_path", "")))
+        
+        # Check against configurable maximum diff size
+        if total_size > settings.max_diff_size:
+            logger.warning(
+                f"Diff size ({total_size} bytes) exceeds maximum allowed size "
+                f"({settings.max_diff_size} bytes)"
+            )
+            raise ReviewProcessException(
+                message=f"Diff too large for processing: {total_size} bytes "
+                        f"(maximum: {settings.max_diff_size} bytes)",
+                details={
+                    "diff_size_bytes": total_size,
+                    "max_allowed_bytes": settings.max_diff_size,
+                    "files_count": len(mr_diff)
+                }
+            )
+        
+        formatted_diff = []
         for diff_item in mr_diff:
             if diff_item.get("diff"):
                 formatted_diff.append(f"--- {diff_item.get('old_path', 'unknown')}")
@@ -126,7 +149,9 @@ class ReviewService:
                 formatted_diff.append(diff_item["diff"])
                 formatted_diff.append("")  # Add spacing between files
 
-        return "\n".join(formatted_diff)
+        result = "\n".join(formatted_diff)
+        logger.debug(f"Formatted diff content: {len(result)} bytes from {len(mr_diff)} files")
+        return result
 
     def format_review_comment(self, review_result: ReviewResult) -> str:
         """

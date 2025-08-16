@@ -2,15 +2,16 @@
 Data models for code review operations
 """
 
+from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal, Dict, Any
 
 
 class CodeIssue(BaseModel):
     """Individual code issue found during review"""
 
     file_path: str = Field(..., description="Path to the file containing the issue")
-    line_number: int = Field(..., description="Line number where issue occurs")
+    line_number: int = Field(..., ge=1, description="Line number where issue occurs (1-based)")
     severity: Literal["critical", "high", "medium", "low"] = Field(
         ..., description="Severity level of the issue"
     )

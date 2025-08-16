@@ -2,15 +2,13 @@
 GitLab API integration service
 """
 
-import httpx
-from typing import Dict, Any, List
 import logging
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-)
+from typing import Any, Dict, List
+
+import httpx
+import pybreaker
+from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
+                      wait_exponential)
 
 from src.config.settings import settings
 from src.exceptions import GitLabAPIException
@@ -19,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class GitLabService:
-    """Service for interacting with GitLab API"""
+    """Service for interacting with GitLab API with circuit breaker protection"""
 
     def __init__(self):
         self.base_url = f"{settings.gitlab_url}/api/v4"
@@ -28,8 +26,37 @@ class GitLabService:
             "Content-Type": "application/json",
         }
         self.client = httpx.AsyncClient(
-            base_url=self.base_url, headers=self.headers, timeout=30.0
+            base_url=self.base_url, 
+            headers=self.headers, 
+            timeout=settings.request_timeout,
+            limits=httpx.Limits(
+                max_keepalive_connections=settings.max_keepalive_connections,
+                max_connections=settings.max_connections,
+                keepalive_expiry=settings.keepalive_expiry
+            )
         )
+        
+        # Initialize circuit breaker for external API calls
+        self.circuit_breaker = pybreaker.CircuitBreaker(
+            fail_max=settings.circuit_breaker_failure_threshold,
+            reset_timeout=settings.circuit_breaker_timeout,
+            exclude=[KeyboardInterrupt, SystemExit],  # Never break on these
+        )
+    
+    async def _make_protected_request(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """Make HTTP request protected by circuit breaker"""
+        try:
+            # Use circuit breaker to protect external API calls
+            return await self.circuit_breaker.call_async(
+                self.client.request, method, url, **kwargs
+            )
+        except pybreaker.CircuitBreakerError as e:
+            logger.warning(f"Circuit breaker is open for GitLab API: {e}")
+            raise GitLabAPIException(
+                message="GitLab API circuit breaker is open - service temporarily unavailable",
+                details={"circuit_breaker_state": str(e)},
+                original_error=e
+            )
 
     @retry(
         stop=stop_after_attempt(3),
@@ -37,10 +64,11 @@ class GitLabService:
         retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError)),
     )
     async def get_merge_request(self, project_id: int, mr_iid: int) -> Dict[str, Any]:
-        """Fetch merge request details with retry logic"""
+        """Fetch merge request details with retry logic and circuit breaker protection"""
         try:
-            response = await self.client.get(
-                f"/projects/{project_id}/merge_requests/{mr_iid}"
+            # Wrap HTTP call with circuit breaker
+            response = await self._make_protected_request(
+                "GET", f"/projects/{project_id}/merge_requests/{mr_iid}"
             )
             response.raise_for_status()
             result: dict[str, Any] = response.json()
@@ -79,10 +107,10 @@ class GitLabService:
     async def get_merge_request_diff(
         self, project_id: int, mr_iid: int
     ) -> List[Dict[str, Any]]:
-        """Fetch merge request diff with retry logic"""
+        """Fetch merge request diff with retry logic and circuit breaker protection"""
         try:
-            response = await self.client.get(
-                f"/projects/{project_id}/merge_requests/{mr_iid}/diffs"
+            response = await self._make_protected_request(
+                "GET", f"/projects/{project_id}/merge_requests/{mr_iid}/diffs"
             )
             response.raise_for_status()
             result: list[dict[str, Any]] = response.json()
@@ -121,11 +149,12 @@ class GitLabService:
     async def post_merge_request_comment(
         self, project_id: int, mr_iid: int, comment: str
     ) -> Dict[str, Any]:
-        """Post a comment on a merge request with retry logic"""
+        """Post a comment on a merge request with retry logic and circuit breaker protection"""
         try:
-            response = await self.client.post(
+            response = await self._make_protected_request(
+                "POST", 
                 f"/projects/{project_id}/merge_requests/{mr_iid}/notes",
-                json={"body": comment},
+                json={"body": comment}
             )
             response.raise_for_status()
             logger.info(f"Posted comment to MR {mr_iid}")

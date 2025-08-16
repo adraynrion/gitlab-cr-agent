@@ -2,11 +2,12 @@
 Health check endpoints
 """
 
-from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
-import httpx
 import logging
 from datetime import datetime
+from typing import Any, Dict
+
+import httpx
+from fastapi import APIRouter, HTTPException
 
 from src.config.settings import settings
 

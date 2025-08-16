@@ -139,16 +139,24 @@ format-diff: ## Show formatting differences
 	@$(VENV_PATH)/bin/black $(SRC_DIRS) --line-length=88 --diff
 
 # Import Management
-imports: ## Sort and clean up imports with autoflake
+imports: ## Sort and clean up imports with isort and autoflake
 	@echo "$(BLUE)Cleaning up imports...$(RESET)"
 	@$(VENV_PATH)/bin/autoflake --remove-all-unused-imports --remove-unused-variables --in-place --recursive $(SRC_DIRS)
-	@echo "$(GREEN)✓ Imports cleaned$(RESET)"
+	@$(VENV_PATH)/bin/isort $(SRC_DIRS)
+	@echo "$(GREEN)✓ Imports cleaned and sorted$(RESET)"
 
-imports-check: ## Check for unused imports
-	@echo "$(BLUE)Checking for unused imports...$(RESET)"
+imports-check: ## Check for unused imports and import ordering
+	@echo "$(BLUE)Checking for unused imports and import ordering...$(RESET)"
 	@$(VENV_PATH)/bin/autoflake --remove-all-unused-imports --remove-unused-variables --check --recursive $(SRC_DIRS) || \
 		(echo "$(RED)✗ Unused imports found. Run 'make imports' to fix.$(RESET)" && exit 1)
-	@echo "$(GREEN)✓ No unused imports$(RESET)"
+	@$(VENV_PATH)/bin/isort --check-only $(SRC_DIRS) || \
+		(echo "$(RED)✗ Import ordering issues found. Run 'make imports' to fix.$(RESET)" && exit 1)
+	@echo "$(GREEN)✓ No unused imports and import order is correct$(RESET)"
+
+imports-sort: ## Sort imports only with isort
+	@echo "$(BLUE)Sorting imports with isort...$(RESET)"
+	@$(VENV_PATH)/bin/isort $(SRC_DIRS)
+	@echo "$(GREEN)✓ Imports sorted$(RESET)"
 
 # Security
 security: ## Run security checks

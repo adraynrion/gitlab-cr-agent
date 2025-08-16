@@ -5,12 +5,13 @@ Authentication & logging middleware
 import logging
 import time
 from typing import Callable
-from fastapi import Request, Response, HTTPException
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
+
+import secure
+from fastapi import HTTPException, Request, Response
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-import secure
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
 
 from src.config.settings import settings
 

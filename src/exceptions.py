@@ -2,7 +2,7 @@
 Custom exception hierarchy for GitLab AI Code Review Agent
 """
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 
 class GitLabReviewerException(Exception):
@@ -16,13 +16,14 @@ class GitLabReviewerException(Exception):
     ):
         super().__init__(message)
         self.message = message
-        self.details = details or {}
+        self.details = details.copy() if details else {}
         self.original_error = original_error
 
     def __str__(self) -> str:
+        message = str(self.message) if self.message is not None else "Unknown error"
         if self.details:
-            return f"{self.message} - Details: {self.details}"
-        return self.message
+            return f"{message} - Details: {self.details}"
+        return message
 
 
 class GitLabAPIException(GitLabReviewerException):

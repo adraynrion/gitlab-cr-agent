@@ -3,33 +3,28 @@ GitLab AI Code Review Agent
 Main FastAPI application with PydanticAI integration
 """
 
-from fastapi import FastAPI, Request, HTTPException
+import asyncio
+import logging
+import signal
+import threading
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from typing import Any, Optional
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
-import logging
-import uvicorn
-import signal
-import asyncio
-from typing import Dict, Any
 
-from src.api import webhooks, health
-from src.api.middleware import (
-    AuthenticationMiddleware,
-    LoggingMiddleware,
-    SecurityMiddleware,
-)
-from src.config.settings import settings
 from src.agents.code_reviewer import initialize_review_agent
-from src.exceptions import (
-    GitLabReviewerException,
-    GitLabAPIException,
-    AIProviderException,
-    SecurityException,
-    RateLimitException,
-    WebhookValidationException,
-    ConfigurationException,
-)
+from src.api import health, webhooks
+from src.api.middleware import (AuthenticationMiddleware, LoggingMiddleware,
+                                SecurityMiddleware)
+from src.config.settings import settings
+from src.exceptions import (AIProviderException, ConfigurationException,
+                            GitLabAPIException, GitLabReviewerException,
+                            RateLimitException, SecurityException,
+                            WebhookValidationException)
 
 # Configure structured logging
 logging.basicConfig(
@@ -38,9 +33,45 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global application state
-app_state: Dict[str, Any] = {}
-shutdown_event = asyncio.Event()
+@dataclass
+class AppState:
+    """Encapsulated application state with thread safety"""
+    review_agent: Optional[Any] = None
+    initialized: bool = False
+    shutdown_event: Optional[asyncio.Event] = None
+    _lock: threading.Lock = None
+    
+    def __post_init__(self):
+        """Initialize thread-safe lock after dataclass creation"""
+        if self._lock is None:
+            self._lock = threading.Lock()
+        if self.shutdown_event is None:
+            self.shutdown_event = asyncio.Event()
+    
+    def mark_initialized(self, agent: Any) -> None:
+        """Thread-safe method to mark application as initialized"""
+        with self._lock:
+            self.review_agent = agent
+            self.initialized = True
+    
+    def get_review_agent(self) -> Optional[Any]:
+        """Thread-safe method to get review agent"""
+        with self._lock:
+            return self.review_agent
+    
+    def is_initialized(self) -> bool:
+        """Thread-safe method to check initialization status"""
+        with self._lock:
+            return self.initialized
+    
+    def clear(self) -> None:
+        """Thread-safe method to clear application state"""
+        with self._lock:
+            self.review_agent = None
+            self.initialized = False
+
+# Global application state instance
+app_state = AppState()
 
 
 def setup_signal_handlers():
@@ -48,7 +79,7 @@ def setup_signal_handlers():
 
     def signal_handler(signum, frame):
         logger.info(f"Received signal {signum}, initiating graceful shutdown")
-        shutdown_event.set()
+        app_state.shutdown_event.set()
 
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
@@ -61,11 +92,8 @@ async def initialize_resources():
     try:
         # Initialize review agent
         review_agent = await initialize_review_agent()
-        app_state["review_agent"] = review_agent
+        app_state.mark_initialized(review_agent)
         logger.info(f"Review agent initialized with model: {settings.ai_model}")
-
-        # Mark as initialized
-        app_state["initialized"] = True
 
     except Exception as e:
         logger.error(f"Failed to initialize resources: {e}")
@@ -82,7 +110,14 @@ async def cleanup_resources():
 
     try:
         # Cleanup review agent if it exists
-        if "review_agent" in app_state:
+        review_agent = app_state.get_review_agent()
+        if review_agent:
+            # Check if review agent has cleanup methods and call them
+            if hasattr(review_agent, 'close') and callable(getattr(review_agent, 'close')):
+                if asyncio.iscoroutinefunction(review_agent.close):
+                    await review_agent.close()
+                else:
+                    review_agent.close()
             logger.info("Review agent cleanup complete")
 
         # Clear app state
@@ -110,7 +145,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down GitLab AI Reviewer")
-    shutdown_event.set()
+    app_state.shutdown_event.set()
     await cleanup_resources()
     logger.info("Graceful shutdown complete")
 
@@ -389,7 +424,7 @@ async def root():
     return {
         "service": "GitLab AI Code Review Agent",
         "version": "1.0.0",
-        "status": "running" if app_state.get("initialized") else "starting",
+        "status": "running" if app_state.is_initialized() else "starting",
         "environment": settings.environment,
         "features": {
             "rate_limiting": settings.rate_limit_enabled,
@@ -403,7 +438,7 @@ async def root():
 # Dependency injection functions
 async def get_review_agent():
     """Dependency injection for review agent"""
-    agent = app_state.get("review_agent")
+    agent = app_state.get_review_agent()
     if not agent:
         raise ConfigurationException(
             message="Review agent not initialized", config_key="review_agent"
