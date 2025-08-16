@@ -95,37 +95,59 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
-    """Middleware for API key authentication"""
+    """Middleware for Bearer token authentication"""
 
     def __init__(self, app: ASGIApp):
         super().__init__(app)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Skip auth for health checks, root endpoint, and webhook endpoints
-        public_paths = ["/", "/health/live", "/health/ready", "/webhook/gitlab"]
-        if request.url.path in public_paths:
-            return await call_next(request)  # type: ignore[no-any-return]
-
-        # Skip auth if no API key is configured
+        # Skip auth if no API key is configured - all endpoints are public
         if not settings.api_key:
             return await call_next(request)  # type: ignore[no-any-return]
 
-        # Check API key for protected endpoints
-        api_key = request.headers.get("X-API-Key")
-        if api_key != settings.api_key:
+        # Only the root endpoint is public when API_KEY is configured
+        public_paths = ["/"]
+        if request.url.path in public_paths:
+            return await call_next(request)  # type: ignore[no-any-return]
+
+        # Check Bearer token for protected endpoints
+        auth_header = request.headers.get("Authorization")
+
+        if not auth_header or not auth_header.startswith("Bearer "):
             client_host = request.client.host if request.client else "unknown"
-            logger.warning(f"Invalid API key attempt from {client_host}")
+            logger.warning(f"Missing or invalid Bearer token from {client_host}")
             # Return JSON response directly from middleware
             from fastapi.responses import JSONResponse
 
             return JSONResponse(
                 status_code=401,
                 content={
-                    "error": "Invalid API key",
+                    "error": "Authorization header missing or invalid",
+                    "message": "Bearer token required",
+                    "type": "authentication_error",
+                    "timestamp": str(time.time()),
+                },
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Extract token from Bearer header
+        token = auth_header[7:]  # Remove "Bearer " prefix
+
+        if token != settings.api_key:
+            client_host = request.client.host if request.client else "unknown"
+            logger.warning(f"Invalid Bearer token attempt from {client_host}")
+            # Return JSON response directly from middleware
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": "Invalid Bearer token",
                     "message": "Access denied",
                     "type": "authentication_error",
                     "timestamp": str(time.time()),
                 },
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         return await call_next(request)  # type: ignore[no-any-return]

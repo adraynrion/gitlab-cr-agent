@@ -87,8 +87,7 @@ def mock_env_vars(monkeypatch):
         "REVIEW_IGNORE_PATTERNS": '["**/test_*.py", "**/__pycache__/**"]',
         "REVIEW_MAX_FILES": "50",
         "REVIEW_MAX_LINES": "1000",
-        "AUTH_ENABLED": "true",
-        "AUTH_TOKEN": "test-auth-token",
+        "API_KEY": "test-api-key-1234567890",
         # New performance and security settings
         "MAX_DIFF_SIZE": "1048576",  # 1MB
         "REQUEST_TIMEOUT": "30.0",
@@ -598,9 +597,31 @@ def cleanup_async_mocks():
 # ============================================================================
 
 
+# ============================================================================
+# Authentication Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def auth_headers() -> Dict[str, str]:
+    """Return valid Bearer authentication headers."""
+    return {"Authorization": "Bearer test-api-key-1234567890"}
+
+
+@pytest.fixture
+def authenticated_webhook_headers(
+    auth_headers: Dict[str, str], webhook_headers: Dict[str, str]
+) -> Dict[str, str]:
+    """Return webhook headers with Bearer authentication."""
+    headers = webhook_headers.copy()
+    headers.update(auth_headers)
+    return headers
+
+
 def pytest_configure(config):
     """Configure pytest with custom markers."""
     config.addinivalue_line("markers", "unit: mark test as a unit test")
     config.addinivalue_line("markers", "integration: mark test as an integration test")
     config.addinivalue_line("markers", "slow: mark test as slow")
     config.addinivalue_line("markers", "security: mark test as security-related")
+    config.addinivalue_line("markers", "auth: mark test as authentication-related")

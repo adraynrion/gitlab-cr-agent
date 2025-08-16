@@ -15,8 +15,9 @@ class TestGetVersion:
     def test_get_version_success(self):
         """Test getting version from valid version.txt file."""
         # Reset cache for this test
-        import src.utils.version
         from pathlib import Path
+
+        import src.utils.version
 
         src.utils.version._cached_version = None
 
@@ -31,8 +32,9 @@ class TestGetVersion:
 
     def test_get_version_caching(self):
         """Test that version is cached after first read."""
-        import src.utils.version
         from pathlib import Path
+
+        import src.utils.version
 
         src.utils.version._cached_version = None
 
@@ -170,16 +172,17 @@ class TestGetVersionInfo:
 
     def test_get_version_info_success(self):
         """Test getting detailed version information."""
-        import src.utils.version
         from pathlib import Path
+
+        import src.utils.version
 
         # Read actual version from file
         project_root = Path(__file__).parent.parent.parent
         version_file = project_root / "version.txt"
         actual_version = version_file.read_text().strip()
-        
+
         # Parse version parts
-        major, minor, patch = map(int, actual_version.split('.'))
+        major, minor, patch = map(int, actual_version.split("."))
 
         src.utils.version._cached_version = actual_version  # Use cached version
 
@@ -247,10 +250,11 @@ class TestVersionCaching:
 
         # Should read from actual file
         from pathlib import Path
+
         project_root = Path(__file__).parent.parent.parent
         version_file = project_root / "version.txt"
         expected_version = version_file.read_text().strip()
-        
+
         version = get_version()
         assert version == expected_version  # Current actual version
 
@@ -269,6 +273,7 @@ class TestVersionCaching:
 
         # Read expected version from actual file
         from pathlib import Path
+
         project_root = Path(__file__).parent.parent.parent
         version_file = project_root / "version.txt"
         expected_version = version_file.read_text().strip()
