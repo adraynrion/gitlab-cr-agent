@@ -1,22 +1,13 @@
 services:
-  app:
+  gitlab-ai-agent:
+    container_name: gitlab-ai-agent
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    environment:
-      - ENVIRONMENT=development
-      - GITLAB_URL=${GITLAB_URL}
-      - GITLAB_TOKEN=${GITLAB_TOKEN}
-      - GITLAB_WEBHOOK_SECRET=${GITLAB_WEBHOOK_SECRET}
-      - GITLAB_TRIGGER_TAG=${GITLAB_TRIGGER_TAG:-ai-review}
-      - AI_MODEL=${AI_MODEL:-openai:gpt-4o}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-    volumes:
-      - ./src:/app/src:ro
+    env_file:
+      - .env
     networks:
       - ai-reviewer
     restart: unless-stopped

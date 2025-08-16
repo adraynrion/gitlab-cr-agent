@@ -10,13 +10,12 @@ authors = [
     {name = "adraynrion", email = "adraynrion@pm.me"}
 ]
 readme = "README.md"
-license = {text = "MIT"}
+license = "LicenseRef-Custom-NonCommercial"
 requires-python = ">=3.11"
 keywords = ["gitlab", "code-review", "ai", "automation", "pydantic-ai"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",

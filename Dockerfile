@@ -5,7 +5,6 @@ FROM python:3.11-slim AS base
 COPY version.txt /app/version.txt
 
 # Add version label
-LABEL version=$(cat /app/version.txt)
 LABEL maintainer="Adraynrion"
 LABEL description="AI-powered code review automation for GitLab using PydanticAI"
 
@@ -28,7 +27,9 @@ RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 # Builder stage
 FROM base AS builder
 
-COPY pyproject.toml .
+# Copy source code and configuration files needed for installation
+COPY pyproject.toml README.md LICENSE ./
+COPY src/ ./src/
 RUN pip install --user --no-cache-dir -e ".[dev,test]"
 
 # Production stage
