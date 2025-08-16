@@ -2,14 +2,29 @@
 Review service for orchestrating code reviews
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import pybreaker
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
 from src.agents.code_reviewer import CodeReviewAgent
+from src.api.middleware import get_correlation_id, get_request_id
 from src.config.settings import settings
-from src.exceptions import (AIProviderException, GitLabAPIException,
-                            ReviewProcessException)
+from src.exceptions import (
+    AIProviderException,
+    GitLabAPIException,
+    RateLimitException,
+    ReviewProcessException,
+)
 from src.models.gitlab_models import MergeRequestEvent
 from src.models.review_models import CodeIssue, ReviewContext, ReviewResult
 
@@ -17,10 +32,105 @@ logger = logging.getLogger(__name__)
 
 
 class ReviewService:
-    """Service for orchestrating AI code reviews"""
+    """Service for orchestrating AI code reviews with enhanced retry and rate limiting"""
 
     def __init__(self, review_agent: Optional[CodeReviewAgent] = None):
         self.review_agent = review_agent or CodeReviewAgent()
+
+        # Circuit breaker for AI provider calls
+        self.ai_circuit_breaker = pybreaker.CircuitBreaker(
+            fail_max=3,  # More lenient for AI calls
+            reset_timeout=120,  # 2 minutes recovery time
+            exclude=[KeyboardInterrupt, SystemExit, RateLimitException],
+        )
+
+        # Rate limiter state
+        self._last_ai_call = 0.0
+        self._min_ai_call_interval = 2.0  # Minimum 2 seconds between AI calls
+
+    async def _enforce_rate_limit(self) -> None:
+        """Enforce rate limiting between AI provider calls"""
+        import time
+
+        current_time = time.time()
+        time_since_last_call = current_time - self._last_ai_call
+
+        if time_since_last_call < self._min_ai_call_interval:
+            sleep_time = self._min_ai_call_interval - time_since_last_call
+            logger.info(
+                f"Rate limiting: waiting {sleep_time:.2f}s before next AI call",
+                extra={
+                    "correlation_id": get_correlation_id(),
+                    "request_id": get_request_id(),
+                    "operation": "rate_limit_wait",
+                    "sleep_time": sleep_time,
+                },
+            )
+            await asyncio.sleep(sleep_time)
+
+        self._last_ai_call = time.time()
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=4, max=30),
+        retry=retry_if_exception_type((AIProviderException, ConnectionError, OSError)),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+    )
+    async def _call_ai_with_retry(
+        self, diff_content: str, review_context: ReviewContext
+    ) -> ReviewResult:
+        """Call AI provider with enhanced retry logic and circuit breaker protection"""
+        try:
+            # Enforce rate limiting
+            await self._enforce_rate_limit()
+
+            # Use circuit breaker to protect AI calls
+            result: ReviewResult = await self.ai_circuit_breaker.call_async(
+                self.review_agent.review_merge_request, diff_content, review_context
+            )
+
+            logger.info(
+                "AI review completed successfully",
+                extra={
+                    "correlation_id": get_correlation_id(),
+                    "request_id": get_request_id(),
+                    "operation": "ai_review_success",
+                    "issues_found": len(result.issues)
+                    if hasattr(result, "issues")
+                    else 0,
+                },
+            )
+
+            return result
+
+        except pybreaker.CircuitBreakerError as e:
+            logger.error(
+                f"AI circuit breaker is open: {e}",
+                extra={
+                    "correlation_id": get_correlation_id(),
+                    "request_id": get_request_id(),
+                    "operation": "ai_circuit_breaker_open",
+                    "error_type": "circuit_breaker_error",
+                },
+            )
+            raise AIProviderException(
+                message="AI service circuit breaker is open - service temporarily unavailable",
+                provider="unknown",
+                model="unknown",
+                details={"circuit_breaker_state": str(e)},
+                original_error=e,
+            )
+        except Exception as e:
+            logger.error(
+                f"AI provider call failed: {e}",
+                extra={
+                    "correlation_id": get_correlation_id(),
+                    "request_id": get_request_id(),
+                    "operation": "ai_call_failed",
+                    "error_type": type(e).__name__,
+                },
+            )
+            raise
 
     async def review_merge_request(
         self,
@@ -40,7 +150,14 @@ class ReviewService:
             ReviewResult with comprehensive analysis
         """
         logger.info(
-            f"Starting review orchestration for MR {mr_event.object_attributes.iid}"
+            f"Starting review orchestration for MR {mr_event.object_attributes.iid}",
+            extra={
+                "correlation_id": get_correlation_id(),
+                "request_id": get_request_id(),
+                "project_id": mr_event.project.id,
+                "mr_iid": mr_event.object_attributes.iid,
+                "operation": "review_orchestration_start",
+            },
         )
 
         try:
@@ -70,10 +187,8 @@ class ReviewService:
                 file_changes=mr_diff,
             )
 
-            # Execute AI review
-            review_result = await self.review_agent.review_merge_request(
-                diff_content=diff_content, context=context
-            )
+            # Execute AI review with enhanced retry and rate limiting
+            review_result = await self._call_ai_with_retry(diff_content, context)
 
             # Add metadata
             review_result.metrics.update(
@@ -85,17 +200,45 @@ class ReviewService:
                 }
             )
 
-            logger.info(f"Review completed for MR {mr_event.object_attributes.iid}")
+            logger.info(
+                f"Review completed for MR {mr_event.object_attributes.iid}",
+                extra={
+                    "correlation_id": get_correlation_id(),
+                    "request_id": get_request_id(),
+                    "project_id": mr_event.project.id,
+                    "mr_iid": mr_event.object_attributes.iid,
+                    "operation": "review_orchestration_success",
+                    "issues_found": len(review_result.issues)
+                    if hasattr(review_result, "issues")
+                    else 0,
+                },
+            )
             return review_result
 
         except (GitLabAPIException, AIProviderException) as e:
             logger.error(
-                f"Review orchestration failed for MR {mr_event.object_attributes.iid}: {e.message}"
+                f"Review orchestration failed for MR {mr_event.object_attributes.iid}: {e.message}",
+                extra={
+                    "correlation_id": get_correlation_id(),
+                    "request_id": get_request_id(),
+                    "project_id": mr_event.project.id,
+                    "mr_iid": mr_event.object_attributes.iid,
+                    "operation": "review_orchestration_failed",
+                    "error_type": type(e).__name__,
+                },
             )
             raise
         except Exception as e:
             logger.error(
-                f"Unexpected error in review orchestration for MR {mr_event.object_attributes.iid}: {e}"
+                f"Unexpected error in review orchestration for MR {mr_event.object_attributes.iid}: {e}",
+                extra={
+                    "correlation_id": get_correlation_id(),
+                    "request_id": get_request_id(),
+                    "project_id": mr_event.project.id,
+                    "mr_iid": mr_event.object_attributes.iid,
+                    "operation": "review_orchestration_error",
+                    "error_type": type(e).__name__,
+                },
             )
             raise ReviewProcessException(
                 message=f"Review orchestration failed for MR {mr_event.object_attributes.iid}",

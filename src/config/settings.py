@@ -1,5 +1,5 @@
 """
-Application configuration management
+Application configuration management with secure secret handling
 """
 
 import os
@@ -7,6 +7,8 @@ from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
+
+from src.utils.secrets import get_secure_setting
 
 
 class Settings(BaseSettings):
@@ -26,9 +28,28 @@ class Settings(BaseSettings):
 
     # GitLab Configuration
     gitlab_url: str = Field(default="", min_length=1)
-    gitlab_token: str = Field(default="", min_length=1)
-    gitlab_webhook_secret: Optional[str] = Field(default=None)
+    gitlab_token_raw: str = Field(default="", min_length=1, alias="gitlab_token")
+    gitlab_webhook_secret_raw: Optional[str] = Field(
+        default=None, alias="gitlab_webhook_secret"
+    )
     gitlab_trigger_tag: str = Field(default="ai-review")
+
+    @property
+    def gitlab_token(self) -> str:
+        """Securely retrieve GitLab token"""
+        result = get_secure_setting(
+            "gitlab_token", "GITLAB_TOKEN", self.gitlab_token_raw
+        )
+        return result or ""
+
+    @property
+    def gitlab_webhook_secret(self) -> Optional[str]:
+        """Securely retrieve GitLab webhook secret"""
+        return get_secure_setting(
+            "gitlab_webhook_secret",
+            "GITLAB_WEBHOOK_SECRET",
+            self.gitlab_webhook_secret_raw,
+        )
 
     @field_validator("gitlab_url")
     @classmethod
@@ -39,7 +60,7 @@ class Settings(BaseSettings):
         # Remove trailing slash for consistency
         return v.rstrip("/")
 
-    @field_validator("gitlab_token")
+    @field_validator("gitlab_token_raw")
     @classmethod
     def validate_gitlab_token(cls, v: str) -> str:
         """Validate GitLab token format"""
@@ -54,25 +75,53 @@ class Settings(BaseSettings):
     ai_retries: int = Field(default=3)
 
     # OpenAI Configuration
-    openai_api_key: Optional[str] = Field(default=None)
+    openai_api_key_raw: Optional[str] = Field(default=None, alias="openai_api_key")
     openai_model_name: str = Field(default="gpt-4o")
     openai_base_url: Optional[str] = Field(default=None)
 
     # Anthropic Configuration
-    anthropic_api_key: Optional[str] = Field(default=None)
+    anthropic_api_key_raw: Optional[str] = Field(
+        default=None, alias="anthropic_api_key"
+    )
     anthropic_model_name: str = Field(default="claude-3-5-sonnet-latest")
     anthropic_base_url: Optional[str] = Field(default=None)
 
     # Google Configuration
-    google_api_key: Optional[str] = Field(default=None)
+    google_api_key_raw: Optional[str] = Field(default=None, alias="google_api_key")
     gemini_model_name: str = Field(default="gemini-1.5-pro")
     google_base_url: Optional[str] = Field(default=None)
+
+    @property
+    def openai_api_key(self) -> Optional[str]:
+        """Securely retrieve OpenAI API key"""
+        return get_secure_setting(
+            "openai_api_key", "OPENAI_API_KEY", self.openai_api_key_raw
+        )
+
+    @property
+    def anthropic_api_key(self) -> Optional[str]:
+        """Securely retrieve Anthropic API key"""
+        return get_secure_setting(
+            "anthropic_api_key", "ANTHROPIC_API_KEY", self.anthropic_api_key_raw
+        )
+
+    @property
+    def google_api_key(self) -> Optional[str]:
+        """Securely retrieve Google API key"""
+        return get_secure_setting(
+            "google_api_key", "GOOGLE_API_KEY", self.google_api_key_raw
+        )
 
     # Security
     allowed_origins: List[str] = Field(
         default_factory=lambda: []  # Empty by default, requires explicit configuration
     )
-    api_key: Optional[str] = Field(default=None)
+    api_key_raw: Optional[str] = Field(default=None, alias="api_key")
+
+    @property
+    def api_key(self) -> Optional[str]:
+        """Securely retrieve internal API key"""
+        return get_secure_setting("api_key", "API_KEY", self.api_key_raw)
 
     # Rate limiting
     rate_limit_enabled: bool = Field(default=True)

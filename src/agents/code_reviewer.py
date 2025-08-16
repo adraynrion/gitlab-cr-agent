@@ -7,8 +7,12 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from pydantic_ai import Agent, RunContext
-from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
-                      wait_exponential)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from src.agents.providers import get_llm_model
 from src.config.settings import settings

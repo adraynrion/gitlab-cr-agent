@@ -159,60 +159,73 @@ async def process_merge_request_review(
     mr_event: MergeRequestEvent, review_agent: Optional[CodeReviewAgent] = None
 ):
     """
-    Background task to process merge request review
+    Background task to process merge request review with proper resource management
     """
     try:
-        # Initialize services - create fresh instances for background task
-        gitlab_service = GitLabService()
+        # Use async context manager to ensure proper resource cleanup
+        async with GitLabService() as gitlab_service:
+            # Initialize review agent if not provided
+            if review_agent is None:
+                from src.agents.code_reviewer import initialize_review_agent
 
-        # Initialize review agent if not provided
-        if review_agent is None:
-            from src.agents.code_reviewer import initialize_review_agent
+                review_agent = await initialize_review_agent()
 
-            review_agent = await initialize_review_agent()
+            review_service = ReviewService(review_agent=review_agent)
 
-        review_service = ReviewService(review_agent=review_agent)
+            # Fetch merge request details and diff
+            mr_details = await gitlab_service.get_merge_request(
+                project_id=mr_event.project.id, mr_iid=mr_event.object_attributes.iid
+            )
 
-        # Fetch merge request details and diff
-        mr_details = await gitlab_service.get_merge_request(
-            project_id=mr_event.project.id, mr_iid=mr_event.object_attributes.iid
-        )
+            mr_diff = await gitlab_service.get_merge_request_diff(
+                project_id=mr_event.project.id, mr_iid=mr_event.object_attributes.iid
+            )
 
-        mr_diff = await gitlab_service.get_merge_request_diff(
-            project_id=mr_event.project.id, mr_iid=mr_event.object_attributes.iid
-        )
+            # Perform AI code review
+            review_result = await review_service.review_merge_request(
+                mr_details=mr_details, mr_diff=mr_diff, mr_event=mr_event
+            )
 
-        # Perform AI code review
-        review_result = await review_service.review_merge_request(
-            mr_details=mr_details, mr_diff=mr_diff, mr_event=mr_event
-        )
+            # Post review comment to GitLab
+            comment = review_service.format_review_comment(review_result)
 
-        # Post review comment to GitLab
-        comment = review_service.format_review_comment(review_result)
-
-        await gitlab_service.post_merge_request_comment(
-            project_id=mr_event.project.id,
-            mr_iid=mr_event.object_attributes.iid,
-            comment=comment,
-        )
-
-        logger.info(
-            f"Successfully posted review for MR {mr_event.object_attributes.iid}"
-        )
-
-    except Exception as e:
-        logger.error(f"Failed to process MR review: {e}")
-
-        # Post error comment to GitLab
-        try:
-            error_comment = "❌ **AI Code Review Failed**\n\nAn error occurred during the review process. Please check the logs for details."
-
-            gitlab_service = GitLabService()
             await gitlab_service.post_merge_request_comment(
                 project_id=mr_event.project.id,
                 mr_iid=mr_event.object_attributes.iid,
-                comment=error_comment,
+                comment=comment,
             )
+
+            logger.info(
+                f"Successfully posted review for MR {mr_event.object_attributes.iid}",
+                extra={
+                    "project_id": mr_event.project.id,
+                    "mr_iid": mr_event.object_attributes.iid,
+                    "action": "review_completed",
+                },
+            )
+
+    except Exception as e:
+        logger.error(
+            f"Failed to process MR review: {e}",
+            extra={
+                "project_id": mr_event.project.id,
+                "mr_iid": mr_event.object_attributes.iid,
+                "error": str(e),
+                "action": "review_failed",
+            },
+            exc_info=True,
+        )
+
+        # Post error comment to GitLab with separate resource management
+        try:
+            error_comment = "❌ **AI Code Review Failed**\n\nAn error occurred during the review process. Please check the logs for details."
+
+            async with GitLabService() as error_gitlab_service:
+                await error_gitlab_service.post_merge_request_comment(
+                    project_id=mr_event.project.id,
+                    mr_iid=mr_event.object_attributes.iid,
+                    comment=error_comment,
+                )
         except Exception as comment_error:
             logger.error(
                 f"Failed to post error comment to GitLab MR {mr_event.object_attributes.iid}: {comment_error}",
@@ -221,5 +234,6 @@ async def process_merge_request_review(
                     "mr_iid": mr_event.object_attributes.iid,
                     "original_error": str(e),
                     "comment_error": str(comment_error),
+                    "action": "error_comment_failed",
                 },
             )
