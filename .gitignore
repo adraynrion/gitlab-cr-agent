@@ -2,10 +2,12 @@ __pycache__
 .venv
 .env
 *.egg-info/
+.mypy_cache/
 
 # Test
 .coverage
 htmlcov/
+.pytest_cache/
 
 # Claude
 .claude/

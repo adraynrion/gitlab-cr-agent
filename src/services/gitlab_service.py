@@ -26,24 +26,26 @@ class GitLabService:
             "Content-Type": "application/json",
         }
         self.client = httpx.AsyncClient(
-            base_url=self.base_url, 
-            headers=self.headers, 
+            base_url=self.base_url,
+            headers=self.headers,
             timeout=settings.request_timeout,
             limits=httpx.Limits(
                 max_keepalive_connections=settings.max_keepalive_connections,
                 max_connections=settings.max_connections,
-                keepalive_expiry=settings.keepalive_expiry
-            )
+                keepalive_expiry=settings.keepalive_expiry,
+            ),
         )
-        
+
         # Initialize circuit breaker for external API calls
         self.circuit_breaker = pybreaker.CircuitBreaker(
             fail_max=settings.circuit_breaker_failure_threshold,
             reset_timeout=settings.circuit_breaker_timeout,
             exclude=[KeyboardInterrupt, SystemExit],  # Never break on these
         )
-    
-    async def _make_protected_request(self, method: str, url: str, **kwargs) -> httpx.Response:
+
+    async def _make_protected_request(
+        self, method: str, url: str, **kwargs
+    ) -> httpx.Response:
         """Make HTTP request protected by circuit breaker"""
         try:
             # Use circuit breaker to protect external API calls
@@ -55,7 +57,7 @@ class GitLabService:
             raise GitLabAPIException(
                 message="GitLab API circuit breaker is open - service temporarily unavailable",
                 details={"circuit_breaker_state": str(e)},
-                original_error=e
+                original_error=e,
             )
 
     @retry(
@@ -152,9 +154,9 @@ class GitLabService:
         """Post a comment on a merge request with retry logic and circuit breaker protection"""
         try:
             response = await self._make_protected_request(
-                "POST", 
+                "POST",
                 f"/projects/{project_id}/merge_requests/{mr_iid}/notes",
-                json={"body": comment}
+                json={"body": comment},
             )
             response.raise_for_status()
             logger.info(f"Posted comment to MR {mr_iid}")

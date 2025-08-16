@@ -124,7 +124,7 @@ class ReviewService:
                 total_size += len(str(diff_item["diff"]))
                 total_size += len(str(diff_item.get("old_path", "")))
                 total_size += len(str(diff_item.get("new_path", "")))
-        
+
         # Check against configurable maximum diff size
         if total_size > settings.max_diff_size:
             logger.warning(
@@ -133,14 +133,14 @@ class ReviewService:
             )
             raise ReviewProcessException(
                 message=f"Diff too large for processing: {total_size} bytes "
-                        f"(maximum: {settings.max_diff_size} bytes)",
+                f"(maximum: {settings.max_diff_size} bytes)",
                 details={
                     "diff_size_bytes": total_size,
                     "max_allowed_bytes": settings.max_diff_size,
-                    "files_count": len(mr_diff)
-                }
+                    "files_count": len(mr_diff),
+                },
             )
-        
+
         formatted_diff = []
         for diff_item in mr_diff:
             if diff_item.get("diff"):
@@ -150,7 +150,9 @@ class ReviewService:
                 formatted_diff.append("")  # Add spacing between files
 
         result = "\n".join(formatted_diff)
-        logger.debug(f"Formatted diff content: {len(result)} bytes from {len(mr_diff)} files")
+        logger.debug(
+            f"Formatted diff content: {len(result)} bytes from {len(mr_diff)} files"
+        )
         return result
 
     def format_review_comment(self, review_result: ReviewResult) -> str:

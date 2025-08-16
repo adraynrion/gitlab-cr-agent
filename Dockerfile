@@ -1,6 +1,14 @@
 # Multi-stage build for production
 FROM python:3.11-slim AS base
 
+# Copy version file first to cache version info
+COPY version.txt /app/version.txt
+
+# Add version label
+LABEL version=$(cat /app/version.txt)
+LABEL maintainer="Adraynrion"
+LABEL description="AI-powered code review automation for GitLab using PydanticAI"
+
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

@@ -10,6 +10,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 
 from src.config.settings import settings
+from src.utils.version import get_version
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -119,7 +120,7 @@ async def status() -> Dict[str, Any]:
     """
     return {
         "service": "GitLab AI Code Review Agent",
-        "version": "1.0.0",
+        "version": get_version(),
         "timestamp": datetime.utcnow().isoformat(),
         "environment": settings.environment,
         "configuration": {

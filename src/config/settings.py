@@ -81,17 +81,25 @@ class Settings(BaseSettings):
     # Request limits
     max_request_size: int = Field(default=10 * 1024 * 1024)  # 10MB default
     max_diff_size: int = Field(default=1 * 1024 * 1024)  # 1MB default for diff content
-    
+
     # HTTP Client Configuration
     request_timeout: float = Field(default=30.0)  # Request timeout in seconds
     max_connections: int = Field(default=100)  # Maximum concurrent connections
     max_keepalive_connections: int = Field(default=20)  # Maximum keepalive connections
-    keepalive_expiry: float = Field(default=30.0)  # Keepalive connection expiry in seconds
-    
+    keepalive_expiry: float = Field(
+        default=30.0
+    )  # Keepalive connection expiry in seconds
+
     # Circuit Breaker Configuration
-    circuit_breaker_failure_threshold: int = Field(default=5)  # Number of failures before opening circuit
-    circuit_breaker_timeout: int = Field(default=60)  # Seconds to wait before attempting recovery
-    circuit_breaker_expected_exception: str = Field(default="httpx.HTTPStatusError,httpx.RequestError")
+    circuit_breaker_failure_threshold: int = Field(
+        default=5
+    )  # Number of failures before opening circuit
+    circuit_breaker_timeout: int = Field(
+        default=60
+    )  # Seconds to wait before attempting recovery
+    circuit_breaker_expected_exception: str = Field(
+        default="httpx.HTTPStatusError,httpx.RequestError"
+    )
 
     @field_validator("allowed_origins")
     @classmethod

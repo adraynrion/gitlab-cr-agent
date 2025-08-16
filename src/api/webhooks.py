@@ -49,7 +49,7 @@ def verify_gitlab_token(request: Request):
             webhook_time = float(timestamp)
             current_time = time.time()
             time_diff = abs(current_time - webhook_time)
-            
+
             # Allow 5 minutes tolerance for webhook delivery delays
             if time_diff > 300:  # 5 minutes in seconds
                 logger.warning(

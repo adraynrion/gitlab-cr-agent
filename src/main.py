@@ -25,6 +25,7 @@ from src.exceptions import (AIProviderException, ConfigurationException,
                             GitLabAPIException, GitLabReviewerException,
                             RateLimitException, SecurityException,
                             WebhookValidationException)
+from src.utils.version import get_version
 
 # Configure structured logging
 logging.basicConfig(
@@ -33,42 +34,45 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class AppState:
     """Encapsulated application state with thread safety"""
+
     review_agent: Optional[Any] = None
     initialized: bool = False
     shutdown_event: Optional[asyncio.Event] = None
     _lock: threading.Lock = None
-    
+
     def __post_init__(self):
         """Initialize thread-safe lock after dataclass creation"""
         if self._lock is None:
             self._lock = threading.Lock()
         if self.shutdown_event is None:
             self.shutdown_event = asyncio.Event()
-    
+
     def mark_initialized(self, agent: Any) -> None:
         """Thread-safe method to mark application as initialized"""
         with self._lock:
             self.review_agent = agent
             self.initialized = True
-    
+
     def get_review_agent(self) -> Optional[Any]:
         """Thread-safe method to get review agent"""
         with self._lock:
             return self.review_agent
-    
+
     def is_initialized(self) -> bool:
         """Thread-safe method to check initialization status"""
         with self._lock:
             return self.initialized
-    
+
     def clear(self) -> None:
         """Thread-safe method to clear application state"""
         with self._lock:
             self.review_agent = None
             self.initialized = False
+
 
 # Global application state instance
 app_state = AppState()
@@ -113,7 +117,9 @@ async def cleanup_resources():
         review_agent = app_state.get_review_agent()
         if review_agent:
             # Check if review agent has cleanup methods and call them
-            if hasattr(review_agent, 'close') and callable(getattr(review_agent, 'close')):
+            if hasattr(review_agent, "close") and callable(
+                getattr(review_agent, "close")
+            ):
                 if asyncio.iscoroutinefunction(review_agent.close):
                     await review_agent.close()
                 else:
@@ -156,7 +162,7 @@ setup_signal_handlers()
 # Create FastAPI application
 app = FastAPI(
     title="GitLab AI Code Review Agent",
-    version="1.0.0",
+    version=get_version(),
     description="AI-powered code review automation for GitLab",
     lifespan=lifespan,
 )
@@ -423,7 +429,7 @@ async def root():
     """Root endpoint with system status"""
     return {
         "service": "GitLab AI Code Review Agent",
-        "version": "1.0.0",
+        "version": get_version(),
         "status": "running" if app_state.is_initialized() else "starting",
         "environment": settings.environment,
         "features": {

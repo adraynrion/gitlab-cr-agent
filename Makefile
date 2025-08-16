@@ -1,7 +1,7 @@
 # GitLab Code Review Agent - Makefile
 # Development automation for testing, linting, and code quality
 
-.PHONY: help install test lint format typecheck security clean coverage html-cov all check ci fix quality dev-install
+.PHONY: help install test lint format typecheck security clean coverage html-cov all check ci fix quality dev-install version
 
 # Default target
 .DEFAULT_GOAL := help
@@ -12,6 +12,7 @@ VENV_PATH := .venv
 SRC_DIRS := src tests
 SRC_FILES := $(shell find $(SRC_DIRS) -name "*.py" 2>/dev/null || echo "")
 COVERAGE_MIN := 80
+VERSION := $(shell cat version.txt 2>/dev/null || echo "unknown")
 
 # Colors for output
 RED := \033[31m
@@ -215,41 +216,19 @@ clean-venv: ## Remove virtual environment
 	@rm -rf $(VENV_PATH)
 	@echo "$(GREEN)✓ Virtual environment removed$(RESET)"
 
-# Documentation
-docs: ## Generate documentation (if available)
-	@echo "$(BLUE)Generating documentation...$(RESET)"
-	@if [ -f "docs/Makefile" ]; then \
-		$(MAKE) -C docs html; \
-	else \
-		echo "$(YELLOW)⚠ No documentation setup found$(RESET)"; \
-	fi
-
-# Docker (if Dockerfile exists)
-docker-build: ## Build Docker image
-	@if [ -f "Dockerfile" ]; then \
-		echo "$(BLUE)Building Docker image...$(RESET)"; \
-		docker build -t gitlab-code-review-agent .; \
-	else \
-		echo "$(YELLOW)⚠ No Dockerfile found$(RESET)"; \
-	fi
-
-docker-run: ## Run Docker container
-	@if [ -f "Dockerfile" ]; then \
-		echo "$(BLUE)Running Docker container...$(RESET)"; \
-		docker run -p 8000:8000 gitlab-code-review-agent; \
-	else \
-		echo "$(YELLOW)⚠ No Dockerfile found$(RESET)"; \
-	fi
-
 # Utility
 show-env: ## Show environment information
 	@echo "$(BLUE)Environment Information:$(RESET)"
+	@echo "Application Version: $(VERSION)"
 	@echo "Python: $(shell $(VENV_PATH)/bin/$(PYTHON) --version 2>/dev/null || echo 'Not found')"
 	@echo "Virtual Environment: $(VENV_PATH)"
 	@echo "Source Directories: $(SRC_DIRS)"
 	@echo "Coverage Minimum: $(COVERAGE_MIN)%"
 	@echo "Git Branch: $(shell git branch --show-current 2>/dev/null || echo 'Not a git repo')"
 	@echo "Git Status: $(shell git status --porcelain 2>/dev/null | wc -l || echo 'N/A') files changed"
+
+version: ## Show current application version
+	@echo "$(BLUE)Application Version:$(RESET) $(GREEN)$(VERSION)$(RESET)"
 
 deps: ## Show dependency tree
 	@echo "$(BLUE)Dependency tree:$(RESET)"
