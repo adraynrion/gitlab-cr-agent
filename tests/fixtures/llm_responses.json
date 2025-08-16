@@ -1,0 +1,112 @@
+{
+  "openai_review_response": {
+    "choices": [
+      {
+        "message": {
+          "content": "## Code Review Summary\n\nThe changes look good overall. The new subtract method is properly implemented.\n\n### Issues Found:\n\n1. **Missing type hints** (Line 11-12): Consider adding type hints for better code documentation\n2. **No error handling**: The subtract method doesn't handle edge cases\n\n### Suggestions:\n\n- Add docstring to the new method\n- Consider adding input validation",
+          "role": "assistant"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 150,
+      "completion_tokens": 75,
+      "total_tokens": 225
+    }
+  },
+  "anthropic_review_response": {
+    "content": [
+      {
+        "type": "text",
+        "text": "## Code Review\n\nI've reviewed the changes in this merge request.\n\n### Positive aspects:\n- Clean implementation of the subtract method\n- Test coverage included\n\n### Areas for improvement:\n1. The subtract method lacks documentation\n2. Consider edge case handling for large numbers\n\n### Security: No security issues detected"
+      }
+    ],
+    "usage": {
+      "input_tokens": 200,
+      "output_tokens": 80
+    }
+  },
+  "gemini_review_response": {
+    "candidates": [
+      {
+        "content": {
+          "parts": [
+            {
+              "text": "**Code Review Results**\n\nThe implementation is straightforward and correct.\n\n**Findings:**\n- Missing function documentation\n- No input validation\n- Test coverage is adequate\n\n**Recommendation:** Approve with minor suggestions"
+            }
+          ]
+        }
+      }
+    ],
+    "usageMetadata": {
+      "promptTokenCount": 180,
+      "candidatesTokenCount": 60,
+      "totalTokenCount": 240
+    }
+  },
+  "azure_review_response": {
+    "choices": [
+      {
+        "message": {
+          "content": "### Azure OpenAI Code Review\n\nReviewed the subtract method implementation.\n\n**Issues:**\n- No type annotations\n- Missing docstring\n\n**Quality Score:** 7/10\n\nThe code is functional but could benefit from better documentation.",
+          "role": "assistant"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 145,
+      "completion_tokens": 55,
+      "total_tokens": 200
+    }
+  },
+  "ollama_review_response": {
+    "message": {
+      "role": "assistant",
+      "content": "Code review completed.\n\nThe subtract method is correctly implemented. Consider adding:\n1. Type hints\n2. Docstring\n3. Input validation\n\nNo critical issues found."
+    },
+    "done": true,
+    "total_duration": 5000000000,
+    "load_duration": 1000000000,
+    "prompt_eval_count": 120,
+    "eval_count": 40
+  },
+  "error_response": {
+    "error": {
+      "message": "API rate limit exceeded",
+      "type": "rate_limit_error",
+      "code": "rate_limit_exceeded"
+    }
+  },
+  "invalid_response": {
+    "error": {
+      "message": "Invalid API key",
+      "type": "authentication_error",
+      "code": "invalid_api_key"
+    }
+  },
+  "timeout_response": null,
+  "malformed_response": "This is not valid JSON",
+  "empty_review": {
+    "choices": [
+      {
+        "message": {
+          "content": "",
+          "role": "assistant"
+        },
+        "finish_reason": "stop"
+      }
+    ]
+  },
+  "review_with_comments": {
+    "choices": [
+      {
+        "message": {
+          "content": "FILE: src/main.py\nLINE: 12\nCOMMENT: Add type hints: def subtract(self, a: float, b: float) -> float:\nSEVERITY: minor\nTYPE: suggestion\n\nFILE: src/main.py\nLINE: 11\nCOMMENT: Missing docstring for method\nSEVERITY: minor\nTYPE: issue\n\nFILE: tests/test_main.py\nLINE: 9\nCOMMENT: Good test coverage!\nSEVERITY: info\nTYPE: praise\n\nSUMMARY: The code changes are functional with minor documentation improvements needed.",
+          "role": "assistant"
+        }
+      }
+    ]
+  }
+}
