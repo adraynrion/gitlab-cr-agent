@@ -18,11 +18,12 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 - **Intelligent Tools**: Built-in security pattern detection, complexity analysis, and improvement suggestions
 
 ### Enterprise Security 🛡️
+- **Bearer Token Authentication**: Industry-standard Bearer token auth for all protected endpoints
 - **Rate Limiting**: Configurable per-IP rate limiting to prevent DoS attacks
 - **Request Validation**: Size limits and input sanitization to prevent memory exhaustion
 - **Security Headers**: Full CSRF, XSS, and clickjacking protection
 - **CORS Security**: Environment-specific origins with secure defaults
-- **Token Authentication**: Multi-layer authentication with webhook verification
+- **Webhook Authentication**: Secure webhook verification with shared secrets
 - **Input Validation**: Comprehensive request validation and error handling
 
 ### Production Ready 🚀
@@ -122,7 +123,7 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 | `RATE_LIMIT_ENABLED` | Enable rate limiting | `true` | `false` |
 | `WEBHOOK_RATE_LIMIT` | Webhook rate limit | `10/minute` | `20/minute` |
 | `MAX_REQUEST_SIZE` | Maximum request size in bytes | `10485760` (10MB) | `5242880` (5MB) |
-| `API_KEY` | Optional API key for protected endpoints | - | `your-secret-api-key` |
+| `API_KEY` | Bearer token for API authentication | No | `your-secret-api-key` |
 | `ENVIRONMENT` | Deployment environment | `development` | `production` |
 | `LOG_LEVEL` | Logging level | `INFO` | `DEBUG` |
 
@@ -290,14 +291,57 @@ python -c "from src.main import app; print('✅ App loads successfully')"
 ENVIRONMENT=test GITLAB_URL=http://test GITLAB_TOKEN=test-token-12345678901 python -c "from src.config.settings import settings; print('✅ Config valid')"
 ```
 
+## 🔐 Authentication
+
+### Bearer Token Authentication
+
+When `API_KEY` is configured, ALL endpoints except the root endpoint (`/`) require Bearer token authentication. This includes all health check endpoints and the webhook endpoint.
+
+#### Usage
+
+Include the Bearer token in the `Authorization` header:
+
+```bash
+# Example API calls with Bearer token
+curl -H "Authorization: Bearer your-secret-api-key" http://localhost:8000/health/status
+curl -H "Authorization: Bearer your-secret-api-key" http://localhost:8000/health/live
+curl -X POST -H "Authorization: Bearer your-secret-api-key" http://localhost:8000/webhook/gitlab
+
+# Test authentication
+python test_bearer_auth.py
+```
+
+**Header Details:**
+- **Request Header**: `Authorization: Bearer <token>` (sent by client)
+- **Response Header**: `WWW-Authenticate: Bearer` (returned in 401 responses)
+
+#### Configuration
+
+Set the `API_KEY` environment variable:
+
+```bash
+export API_KEY="your-secure-api-token-here"
+```
+
+#### Endpoint Security Behavior
+
+**When `API_KEY` is NOT set:**
+- All endpoints are publicly accessible (no authentication required)
+
+**When `API_KEY` is configured:**
+- `/` - Always public (service information)
+- `/health/*` - Requires Bearer authentication
+- `/webhook/gitlab` - Requires Bearer authentication
+- All other endpoints - Require Bearer authentication
+
 ## 📊 Monitoring
 
 The application provides several endpoints for monitoring:
 
-- `GET /health/live` - Liveness probe
-- `GET /health/ready` - Readiness probe
-- `GET /health/status` - Detailed status information
-- `GET /` - Basic service information
+- `GET /health/live` - Liveness probe (auth required when API_KEY set)
+- `GET /health/ready` - Readiness probe (auth required when API_KEY set)
+- `GET /health/status` - Detailed status information (auth required when API_KEY set)
+- `GET /` - Basic service information (always public)
 
 ## 🔧 Development
 
@@ -357,11 +401,12 @@ mypy src/
 
 This application implements **enterprise-grade security** measures:
 
+- **Bearer Token Authentication**: Industry-standard Bearer token authentication for all protected endpoints
 - **Input Validation**: All requests validated with size limits and sanitization
 - **Rate Limiting**: Configurable per-IP rate limiting with slowapi
 - **Security Headers**: CSRF, XSS, clickjacking protection via secure middleware
-- **CORS Security**: Environment-specific origin restrictions
-- **Authentication**: Multi-layer token validation for webhooks and API access
+- **CORS Security**: Environment-specific origin restrictions with Authorization header support
+- **Webhook Authentication**: Secure webhook verification with shared secrets
 - **Error Handling**: Structured error responses without information leakage
 - **Retry Logic**: Exponential backoff with circuit breaker patterns
 - **Resource Management**: Memory limits and graceful shutdown handling

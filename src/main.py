@@ -433,7 +433,7 @@ if settings.allowed_origins:
         allow_origins=settings.allowed_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST"],  # Restrict to required methods
-        allow_headers=["X-API-Key", "X-Gitlab-Token", "Content-Type"],
+        allow_headers=["Authorization", "X-Gitlab-Token", "Content-Type"],
     )
     logger.info(f"CORS enabled for origins: {settings.allowed_origins}")
 else:

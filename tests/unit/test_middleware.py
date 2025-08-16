@@ -168,7 +168,7 @@ class TestSecurityMiddleware:
 
 
 class TestAuthenticationMiddleware:
-    """Tests for AuthenticationMiddleware covering API key authentication and Bearer tokens"""
+    """Tests for AuthenticationMiddleware covering Bearer token authentication"""
 
     @pytest.fixture
     def app(self):
@@ -203,53 +203,78 @@ class TestAuthenticationMiddleware:
         """Create test client"""
         return TestClient(app)
 
-    def test_public_paths_bypass_auth(self, client):
-        """Test that public paths bypass authentication"""
-        public_paths = ["/", "/health/live", "/health/ready", "/webhook/gitlab"]
+    def test_root_path_always_public(self, client):
+        """Test that root path is always public regardless of API_KEY"""
+        with patch("api.middleware.settings") as mock_settings:
+            mock_settings.api_key = "test-key"
 
-        for path in public_paths:
-            method = "POST" if "webhook" in path else "GET"
-            if method == "POST":
-                response = client.post(path)
-            else:
-                response = client.get(path)
+            response = client.get("/")
+            assert response.status_code == 200
+            assert response.json() == {"message": "root"}
 
-            # Should not get 401 (may get 404/405 if endpoint doesn't exist)
-            assert response.status_code != 401
+    def test_no_api_key_all_endpoints_public(self, client):
+        """Test that when no API key is configured, all endpoints are public"""
+        with patch("api.middleware.settings") as mock_settings:
+            mock_settings.api_key = None
 
-    def test_protected_endpoint_requires_api_key(self, client):
-        """Test that protected endpoints require API key when configured"""
+            # All endpoints should be accessible without auth
+            response = client.get("/")
+            assert response.status_code == 200
+
+            response = client.get("/health/live")
+            assert response.status_code == 200
+
+            response = client.get("/health/ready")
+            assert response.status_code == 200
+
+            response = client.post("/webhook/gitlab")
+            assert response.status_code == 200
+
+            response = client.get("/protected")
+            assert response.status_code == 200
+
+    def test_protected_endpoint_requires_bearer_token(self, client):
+        """Test that protected endpoints require Bearer token when configured"""
         with patch("api.middleware.settings") as mock_settings:
             mock_settings.api_key = "test-api-key-123"
 
-            # Request without API key
+            # Request without Bearer token
             response = client.get("/protected")
             assert response.status_code == 401
 
             response_data = response.json()
-            assert response_data["error"] == "Invalid API key"
-            assert response_data["message"] == "Access denied"
+            assert response_data["error"] == "Authorization header missing or invalid"
+            assert response_data["message"] == "Bearer token required"
             assert response_data["type"] == "authentication_error"
             assert "timestamp" in response_data
 
-    def test_valid_api_key_grants_access(self, client):
-        """Test that valid API key grants access to protected endpoints"""
+            # Check WWW-Authenticate header
+            assert response.headers.get("WWW-Authenticate") == "Bearer"
+
+    def test_valid_bearer_token_grants_access(self, client):
+        """Test that valid Bearer token grants access to protected endpoints"""
         with patch("api.middleware.settings") as mock_settings:
             mock_settings.api_key = "test-api-key-123"
 
             response = client.get(
-                "/protected", headers={"X-API-Key": "test-api-key-123"}
+                "/protected", headers={"Authorization": "Bearer test-api-key-123"}
             )
             assert response.status_code == 200
             assert response.json() == {"message": "protected"}
 
-    def test_invalid_api_key_denied(self, client):
-        """Test that invalid API key is denied"""
+    def test_invalid_bearer_token_denied(self, client):
+        """Test that invalid Bearer token is denied"""
         with patch("api.middleware.settings") as mock_settings:
             mock_settings.api_key = "correct-key"
 
-            response = client.get("/protected", headers={"X-API-Key": "wrong-key"})
+            response = client.get(
+                "/protected", headers={"Authorization": "Bearer wrong-key"}
+            )
             assert response.status_code == 401
+
+            response_data = response.json()
+            assert response_data["error"] == "Invalid Bearer token"
+            assert response.headers.get("WWW-Authenticate") == "Bearer"
 
     def test_no_api_key_configured_allows_all(self, client):
         """Test that when no API key is configured, all requests are allowed"""
@@ -272,20 +297,22 @@ class TestAuthenticationMiddleware:
         with patch("api.middleware.settings") as mock_settings:
             mock_settings.api_key = "correct-key"
 
-            response = client.get("/protected", headers={"X-API-Key": "wrong-key"})
+            response = client.get(
+                "/protected", headers={"Authorization": "Bearer wrong-key"}
+            )
 
             assert response.status_code == 401
-            assert "Invalid API key attempt" in caplog.text
+            assert "Invalid Bearer token attempt" in caplog.text
 
     def test_authentication_client_host_logging(self, client, caplog):
         """Test client host is logged in authentication failures"""
         with patch("api.middleware.settings") as mock_settings:
             mock_settings.api_key = "correct-key"
 
-            client.get("/protected", headers={"X-API-Key": "wrong-key"})
+            client.get("/protected", headers={"Authorization": "Bearer wrong-key"})
 
             # Should log client host (testclient uses 'testclient' as host)
-            assert "Invalid API key attempt" in caplog.text
+            assert "Invalid Bearer token attempt" in caplog.text
 
     def test_client_host_unknown_when_no_client(self):
         """Test client host handling when request.client is None"""
@@ -305,34 +332,97 @@ class TestAuthenticationMiddleware:
             assert isinstance(response, JSONResponse)
             assert response.status_code == 401
 
-    def test_api_key_case_sensitive(self, client):
-        """Test that API key comparison is case sensitive"""
+    def test_bearer_token_case_sensitive(self, client):
+        """Test that Bearer token comparison is case sensitive"""
         with patch("api.middleware.settings") as mock_settings:
             mock_settings.api_key = "TestKey123"
 
             # Wrong case should fail
-            response = client.get("/protected", headers={"X-API-Key": "testkey123"})
+            response = client.get(
+                "/protected", headers={"Authorization": "Bearer testkey123"}
+            )
             assert response.status_code == 401
 
             # Correct case should pass
-            response = client.get("/protected", headers={"X-API-Key": "TestKey123"})
+            response = client.get(
+                "/protected", headers={"Authorization": "Bearer TestKey123"}
+            )
             assert response.status_code == 200
 
-    def test_missing_api_key_header(self, client):
-        """Test behavior when X-API-Key header is missing"""
+    def test_missing_authorization_header(self, client):
+        """Test behavior when Authorization header is missing"""
         with patch("api.middleware.settings") as mock_settings:
             mock_settings.api_key = "test-key"
 
             response = client.get("/protected")
             assert response.status_code == 401
 
+            response_data = response.json()
+            assert response_data["error"] == "Authorization header missing or invalid"
+
+    def test_malformed_authorization_header(self, client):
+        """Test that malformed Authorization headers are rejected"""
+        with patch("api.middleware.settings") as mock_settings:
+            mock_settings.api_key = "test-key"
+
+            # Test missing Bearer prefix
+            response = client.get("/protected", headers={"Authorization": "test-key"})
+            assert response.status_code == 401
+
+            # Test wrong auth type
+            response = client.get(
+                "/protected", headers={"Authorization": "Basic dGVzdA=="}
+            )
+            assert response.status_code == 401
+
+            # Test Bearer with no token
+            response = client.get("/protected", headers={"Authorization": "Bearer"})
+            assert response.status_code == 401
+
+    def test_all_health_endpoints_require_auth_when_api_key_set(self, client):
+        """Test that ALL health endpoints require auth when API_KEY is configured"""
+        with patch("api.middleware.settings") as mock_settings:
+            mock_settings.api_key = "test-key"
+
+            health_endpoints = ["/health/live", "/health/ready"]
+
+            for endpoint in health_endpoints:
+                # Without auth should fail
+                response = client.get(endpoint)
+                assert (
+                    response.status_code == 401
+                ), f"Endpoint {endpoint} should require auth"
+
+                # With valid auth should pass
+                response = client.get(
+                    endpoint, headers={"Authorization": "Bearer test-key"}
+                )
+                assert (
+                    response.status_code == 200
+                ), f"Endpoint {endpoint} should accept valid auth"
+
+    def test_webhook_endpoint_requires_auth_when_api_key_set(self, client):
+        """Test that webhook endpoint requires auth when API_KEY is configured"""
+        with patch("api.middleware.settings") as mock_settings:
+            mock_settings.api_key = "test-key"
+
+            # Without auth should fail
+            response = client.post("/webhook/gitlab")
+            assert response.status_code == 401
+
+            # With valid auth should pass
+            response = client.post(
+                "/webhook/gitlab", headers={"Authorization": "Bearer test-key"}
+            )
+            assert response.status_code == 200
+
     @pytest.mark.parametrize(
         "path,expected_public",
         [
             ("/", True),
-            ("/health/live", True),
-            ("/health/ready", True),
-            ("/webhook/gitlab", True),
+            ("/health/live", False),
+            ("/health/ready", False),
+            ("/webhook/gitlab", False),
             ("/protected", False),
             ("/api/data", False),
             ("/health/other", False),
@@ -340,11 +430,15 @@ class TestAuthenticationMiddleware:
         ],
     )
     def test_public_path_detection(self, path, expected_public, client):
-        """Test public path detection logic"""
+        """Test public path detection logic when API_KEY is configured"""
         with patch("api.middleware.settings") as mock_settings:
             mock_settings.api_key = "test-key"
 
-            response = client.get(path)
+            response = (
+                client.get(path)
+                if not path.startswith("/webhook")
+                else client.post(path)
+            )
 
             if expected_public:
                 # Public paths should not return 401
@@ -385,8 +479,10 @@ class TestMiddlewareIntegration:
             mock_settings.max_request_size = 1024 * 1024
             mock_settings.is_production = True
 
-            # Request with valid API key
-            response = client.get("/protected", headers={"X-API-Key": "test-key"})
+            # Request with valid Bearer token
+            response = client.get(
+                "/protected", headers={"Authorization": "Bearer test-key"}
+            )
 
             assert response.status_code == 200
 
@@ -403,12 +499,14 @@ class TestMiddlewareIntegration:
             mock_settings.api_key = "correct-key"
             mock_settings.max_request_size = 1024 * 1024
 
-            response = client.get("/protected", headers={"X-API-Key": "wrong-key"})
+            response = client.get(
+                "/protected", headers={"Authorization": "Bearer wrong-key"}
+            )
 
             assert response.status_code == 401
 
             # Should have authentication error log
-            assert "Invalid API key attempt" in caplog.text
+            assert "Invalid Bearer token attempt" in caplog.text
 
     def test_middleware_request_size_limit_with_auth(self, app_with_all_middleware):
         """Test request size limits work even with authentication"""
@@ -423,7 +521,10 @@ class TestMiddlewareIntegration:
                 response = client.post(
                     "/protected",
                     content="x" * 200,
-                    headers={"X-API-Key": "test-key", "content-length": "200"},
+                    headers={
+                        "Authorization": "Bearer test-key",
+                        "content-length": "200",
+                    },
                 )
                 assert response.status_code == 413
             except Exception as e:

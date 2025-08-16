@@ -388,29 +388,88 @@ class TestMiddlewareIntegration:
         # Should have CORS headers
         assert "Access-Control-Allow-Origin" in response.headers
 
-    @patch("src.main.settings")
-    def test_authentication_middleware_bypass(self, mock_settings, client: TestClient):
-        """Test authentication middleware bypasses public endpoints."""
-        mock_settings.auth_enabled = True
-        mock_settings.auth_token = "secret-token"
-
-        # Public endpoints should not require authentication
-        public_endpoints = ["/", "/health", "/health/live", "/health/ready"]
-
-        for endpoint in public_endpoints:
-            response = client.get(endpoint)
-            # Should succeed without auth token
-            assert response.status_code == 200
-
-    @patch("src.main.settings")
-    def test_authentication_required_for_protected_endpoints(
+    @patch("src.api.middleware.settings")
+    def test_authentication_middleware_behavior(
         self, mock_settings, client: TestClient
     ):
-        """Test authentication required for protected endpoints."""
-        mock_settings.auth_enabled = True
-        mock_settings.auth_token = "secret-token"
+        """Test authentication middleware behavior with API_KEY configured."""
+        mock_settings.api_key = "test-secret-token"
 
-        # Webhook endpoint should require authentication when enabled
+        # Root endpoint should be public even with API_KEY set
+        response = client.get("/")
+        assert response.status_code == 200
+
+        # Health endpoints should require authentication when API_KEY is set
+        protected_endpoints = ["/health/live", "/health/ready", "/health/status"]
+
+        for endpoint in protected_endpoints:
+            # Without auth should fail
+            response = client.get(endpoint)
+            assert response.status_code == 401
+
+            # With valid Bearer token should pass
+            response = client.get(
+                endpoint, headers={"Authorization": "Bearer test-secret-token"}
+            )
+            assert response.status_code == 200
+
+    @patch("src.api.middleware.settings")
+    def test_webhook_authentication_required_when_api_key_set(
+        self, mock_settings, client: TestClient
+    ):
+        """Test webhook endpoint requires Bearer auth when API_KEY is configured."""
+        mock_settings.api_key = "secret-token"
+
+        # Webhook endpoint should require Bearer authentication when API_KEY is set
+        payload = {"object_kind": "merge_request"}
+        webhook_headers = {
+            "X-Gitlab-Event": "Merge Request Hook",
+            "X-Gitlab-Token": "test-webhook-secret",
+            "Content-Type": "application/json",
+        }
+
+        # Without Bearer auth should fail
+        with patch("src.api.webhooks.handle_gitlab_webhook"):
+            response = client.post(
+                "/webhook/gitlab", json=payload, headers=webhook_headers
+            )
+            assert response.status_code == 401
+
+        # With valid Bearer token should work
+        auth_headers = webhook_headers.copy()
+        auth_headers["Authorization"] = "Bearer secret-token"
+
+        with patch("src.api.webhooks.handle_gitlab_webhook"):
+            response = client.post(
+                "/webhook/gitlab", json=payload, headers=auth_headers
+            )
+            assert response.status_code in [200, 400]  # 400 for invalid payload is OK
+
+    @patch("src.api.middleware.settings")
+    def test_no_authentication_when_api_key_not_set(
+        self, mock_settings, client: TestClient
+    ):
+        """Test all endpoints are public when API_KEY is not configured."""
+        mock_settings.api_key = None
+
+        # All endpoints should be accessible without authentication
+        test_endpoints = [
+            ("/", "GET"),
+            ("/health/live", "GET"),
+            ("/health/ready", "GET"),
+            ("/health/status", "GET"),
+        ]
+
+        for endpoint, method in test_endpoints:
+            if method == "GET":
+                response = client.get(endpoint)
+            else:
+                response = client.post(endpoint)
+            assert (
+                response.status_code == 200
+            ), f"Endpoint {endpoint} should be public when API_KEY not set"
+
+        # Webhook should also work without auth when API_KEY not set
         payload = {"object_kind": "merge_request"}
         headers = {
             "X-Gitlab-Event": "Merge Request Hook",
@@ -419,13 +478,8 @@ class TestMiddlewareIntegration:
         }
 
         with patch("src.api.webhooks.handle_gitlab_webhook"):
-            response = client.post("/webhook", json=payload, headers=headers)
-
-            # Should require authentication
-            if mock_settings.auth_enabled:
-                assert response.status_code in [401, 403]
-            else:
-                assert response.status_code in [200, 400]
+            response = client.post("/webhook/gitlab", json=payload, headers=headers)
+            assert response.status_code in [200, 400]  # Should work without Bearer auth
 
 
 class TestConcurrency:
