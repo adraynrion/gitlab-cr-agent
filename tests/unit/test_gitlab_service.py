@@ -36,13 +36,10 @@ def mock_gitlab_service(mock_settings):
         mock_client_class.return_value = mock_client_instance
 
         with patch("src.services.gitlab_service.settings", mock_settings), patch(
-            "pybreaker.CircuitBreaker"
-        ) as mock_breaker, patch(
             "src.api.middleware.get_correlation_id", return_value="test-correlation"
         ), patch(
             "src.api.middleware.get_request_id", return_value="test-request"
         ):
-            mock_breaker.return_value = MagicMock()
             service = GitLabService()
             service.client = mock_client_instance
             return service
@@ -259,13 +256,10 @@ async def test_post_merge_request_comment_http_error(mock_gitlab_service):
 async def test_gitlab_service_initialization(mock_settings):
     """Test GitLab service initialization with correct configuration"""
     with patch("httpx.AsyncClient") as mock_client_class, patch(
-        "pybreaker.CircuitBreaker"
-    ) as mock_breaker, patch(
         "src.api.middleware.get_correlation_id", return_value="test-correlation"
     ), patch(
         "src.api.middleware.get_request_id", return_value="test-request"
     ):
-        mock_breaker.return_value = MagicMock()
         with patch("src.services.gitlab_service.settings", mock_settings):
             service = GitLabService()
 

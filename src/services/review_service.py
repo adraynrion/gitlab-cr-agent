@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import pybreaker
+# Circuit breaker import temporarily disabled due to compatibility issues
 from tenacity import (
     before_sleep_log,
     retry,
@@ -37,12 +37,7 @@ class ReviewService:
     def __init__(self, review_agent: Optional[CodeReviewAgent] = None):
         self.review_agent = review_agent or CodeReviewAgent()
 
-        # Circuit breaker for AI provider calls
-        self.ai_circuit_breaker = pybreaker.CircuitBreaker(
-            fail_max=3,  # More lenient for AI calls
-            reset_timeout=120,  # 2 minutes recovery time
-            exclude=[KeyboardInterrupt, SystemExit, RateLimitException],
-        )
+        # Circuit breaker for AI provider calls temporarily disabled due to compatibility issues
 
         # Rate limiter state
         self._last_ai_call = 0.0
@@ -84,9 +79,9 @@ class ReviewService:
             # Enforce rate limiting
             await self._enforce_rate_limit()
 
-            # Use circuit breaker to protect AI calls
-            result: ReviewResult = await self.ai_circuit_breaker.call_async(
-                self.review_agent.review_merge_request, diff_content, review_context
+            # Direct AI call (circuit breaker temporarily disabled)
+            result: ReviewResult = await self.review_agent.review_merge_request(
+                diff_content=diff_content, context=review_context
             )
 
             logger.info(
@@ -103,23 +98,7 @@ class ReviewService:
 
             return result
 
-        except pybreaker.CircuitBreakerError as e:
-            logger.error(
-                f"AI circuit breaker is open: {e}",
-                extra={
-                    "correlation_id": get_correlation_id(),
-                    "request_id": get_request_id(),
-                    "operation": "ai_circuit_breaker_open",
-                    "error_type": "circuit_breaker_error",
-                },
-            )
-            raise AIProviderException(
-                message="AI service circuit breaker is open - service temporarily unavailable",
-                provider="unknown",
-                model="unknown",
-                details={"circuit_breaker_state": str(e)},
-                original_error=e,
-            )
+        # Circuit breaker exception handling temporarily disabled
         except Exception as e:
             logger.error(
                 f"AI provider call failed: {e}",

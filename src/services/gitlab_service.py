@@ -6,7 +6,6 @@ import logging
 from typing import Any, Dict, List
 
 import httpx
-import pybreaker
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -40,12 +39,8 @@ class GitLabService:
             ),
         )
 
-        # Initialize circuit breaker for external API calls
-        self.circuit_breaker = pybreaker.CircuitBreaker(
-            fail_max=settings.circuit_breaker_failure_threshold,
-            reset_timeout=settings.circuit_breaker_timeout,
-            exclude=[KeyboardInterrupt, SystemExit],  # Never break on these
-        )
+        # Circuit breaker functionality temporarily disabled due to pybreaker async compatibility issues
+        # Will be re-implemented with a compatible library in future versions
 
     def _get_headers_with_tracing(self) -> Dict[str, str]:
         """Get request headers with tracing information"""
@@ -65,25 +60,15 @@ class GitLabService:
     async def _make_protected_request(
         self, method: str, url: str, **kwargs
     ) -> httpx.Response:
-        """Make HTTP request protected by circuit breaker with tracing headers"""
-        try:
-            # Add tracing headers to request
-            headers = kwargs.get("headers", {})
-            headers.update(self._get_headers_with_tracing())
-            kwargs["headers"] = headers
+        """Make HTTP request with tracing headers"""
+        # Add tracing headers to request
+        headers = kwargs.get("headers", {})
+        headers.update(self._get_headers_with_tracing())
+        kwargs["headers"] = headers
 
-            # Use circuit breaker to protect external API calls
-            response: httpx.Response = await self.circuit_breaker.call_async(
-                self.client.request, method, url, **kwargs
-            )
-            return response
-        except pybreaker.CircuitBreakerError as e:
-            logger.warning(f"Circuit breaker is open for GitLab API: {e}")
-            raise GitLabAPIException(
-                message="GitLab API circuit breaker is open - service temporarily unavailable",
-                details={"circuit_breaker_state": str(e)},
-                original_error=e,
-            )
+        # Make direct request (circuit breaker temporarily disabled)
+        response: httpx.Response = await self.client.request(method, url, **kwargs)
+        return response
 
     @retry(
         stop=stop_after_attempt(3),
@@ -104,7 +89,7 @@ class GitLabService:
         )
 
         try:
-            # Wrap HTTP call with circuit breaker
+            # Make HTTP request with retry protection
             response = await self._make_protected_request(
                 "GET", f"/projects/{project_id}/merge_requests/{mr_iid}"
             )
@@ -291,7 +276,4 @@ class GitLabService:
             await self.client.aclose()
             logger.info("GitLab service HTTP client closed")
 
-        # Clear circuit breaker state if needed
-        if hasattr(self, "circuit_breaker"):
-            # Circuit breaker cleanup if it has cleanup methods
-            pass
+        # Cleanup completed
