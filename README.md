@@ -13,7 +13,7 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 
 ### Core Capabilities
 - **Multi-LLM Support**: Works with OpenAI GPT-4, Anthropic Claude, and Google Gemini
-- **GitLab Integration**: Seamless webhook-based integration with any self-hosted GitLab instance  
+- **GitLab Integration**: Seamless webhook-based integration with any self-hosted GitLab instance
 - **Comprehensive Analysis**: Security, performance, correctness, and maintainability reviews
 - **Intelligent Tools**: Built-in security pattern detection, complexity analysis, and improvement suggestions
 
@@ -46,7 +46,7 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 ├── FastAPI Application (src/main.py)
 ├── PydanticAI Review Agent (src/agents/)
 │   ├── Multi-LLM Provider Support
-│   └── Security Analysis Tools  
+│   └── Security Analysis Tools
 ├── GitLab Integration (src/services/)
 │   ├── Webhook Handler
 │   ├── API Client
@@ -88,7 +88,7 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
    ```bash
    # Development mode
    python -m src.main
-   
+
    # Or with uvicorn directly
    uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
    ```
@@ -130,7 +130,7 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 
 - `openai:gpt-4o` - OpenAI GPT-4 Omni
 - `anthropic:claude-3-5-sonnet` - Anthropic Claude 3.5 Sonnet
-- `gemini:gemini-1.5-pro` - Google Gemini 1.5 Pro  
+- `gemini:gemini-1.5-pro` - Google Gemini 1.5 Pro
 - `fallback` - Use multiple providers with fallback
 
 ### GitLab Setup
@@ -186,7 +186,7 @@ The merge request introduces input validation to the calculate function, which i
 Missing input sanitization could lead to injection attacks.
 💡 **Suggestion:** Add proper input validation and sanitization
 
-#### 🔵 Low Issues  
+#### 🔵 Low Issues
 **src/calculator.py:8** - Style
 Function lacks proper type hints.
 💡 **Suggestion:** Add type annotations for better code clarity
@@ -276,7 +276,7 @@ pytest tests/security/ -v
 ### Test Categories
 
 - **Unit Tests**: Component-level testing with mocks
-- **Integration Tests**: End-to-end webhook and API testing  
+- **Integration Tests**: End-to-end webhook and API testing
 - **Security Tests**: Rate limiting, input validation, and auth testing
 - **Performance Tests**: Load testing and response time validation
 
@@ -295,7 +295,7 @@ ENVIRONMENT=test GITLAB_URL=http://test GITLAB_TOKEN=test-token-12345678901 pyth
 The application provides several endpoints for monitoring:
 
 - `GET /health/live` - Liveness probe
-- `GET /health/ready` - Readiness probe  
+- `GET /health/ready` - Readiness probe
 - `GET /health/status` - Detailed status information
 - `GET /` - Basic service information
 
@@ -307,12 +307,12 @@ The application provides several endpoints for monitoring:
 src/
 ├── main.py                   # FastAPI application with lifespan management
 ├── exceptions.py             # Standardized exception hierarchy
-├── agents/                   
+├── agents/
 │   ├── code_reviewer.py      # PydanticAI review agent with tools
 │   └── providers.py          # Multi-LLM configuration with error handling
 ├── api/
 │   ├── webhooks.py          # GitLab webhook handlers with rate limiting
-│   ├── health.py            # Comprehensive health check endpoints  
+│   ├── health.py            # Comprehensive health check endpoints
 │   └── middleware.py        # Security, authentication & logging
 ├── services/
 │   ├── gitlab_service.py    # GitLab API client with retry logic
@@ -349,9 +349,6 @@ autoflake --remove-all-unused-imports --remove-unused-variables --in-place --rec
 
 # Type check
 mypy src/
-
-# Run pre-commit hooks
-pre-commit run --all-files
 ```
 
 ## 🔐 Security
@@ -387,7 +384,7 @@ export API_KEY="your-api-key"
 ```bash
 # Available endpoints
 GET /                    # Service status with features
-GET /health/live        # Kubernetes liveness probe  
+GET /health/live        # Kubernetes liveness probe
 GET /health/ready       # Kubernetes readiness probe
 GET /health/status      # Detailed health information
 POST /webhook/gitlab    # GitLab webhook handler
@@ -431,7 +428,7 @@ POST /webhook/gitlab    # GitLab webhook handler
    ```bash
    # Check memory usage and limits
    docker stats gitlab-ai-reviewer
-   
+
    # Adjust MAX_REQUEST_SIZE if needed
    export MAX_REQUEST_SIZE=5242880  # 5MB
    ```

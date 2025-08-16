@@ -20,8 +20,8 @@ RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 # Builder stage
 FROM base AS builder
 
-COPY requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
+COPY pyproject.toml .
+RUN pip install --user --no-cache-dir -e ".[dev,test]"
 
 # Production stage
 FROM base AS production
