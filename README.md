@@ -453,7 +453,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📖 [Documentation](https://github.com/your-org/gitlab-ai-reviewer#readme)
 - 🐛 [Issue Tracker](https://github.com/your-org/gitlab-ai-reviewer/issues)
 - 💬 [Discussions](https://github.com/your-org/gitlab-ai-reviewer/discussions)
-- 🔒 [Security Reports](mailto:security@your-domain.com)
+- 🔒 [Security Reports](mailto:adraynrion@pm.me)
 
 ## 🙏 Acknowledgments
 
