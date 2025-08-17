@@ -22,7 +22,6 @@ from src.config.settings import settings
 from src.exceptions import (
     AIProviderException,
     GitLabAPIException,
-    RateLimitException,
     ReviewProcessException,
 )
 from src.models.gitlab_models import MergeRequestEvent
