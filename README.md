@@ -15,6 +15,7 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 - **Multi-LLM Support**: Works with OpenAI GPT-4, Anthropic Claude, and Google Gemini
 - **GitLab Integration**: Seamless webhook-based integration with any self-hosted GitLab instance
 - **Comprehensive Analysis**: Security, performance, correctness, and maintainability reviews
+- **Standards-Based Rule Engine**: Dynamic rule fetching from OWASP, NIST, Python PEPs, and framework documentation
 - **Enhanced Tool System**: Evidence-based analysis with Context7 MCP integration for documentation validation
 - **Intelligent Analysis**: Built-in security pattern detection, performance anti-pattern identification, and API usage validation
 - **Python-Focused Analysis**: Advanced tool analysis currently optimized for Python codebases
@@ -53,6 +54,7 @@ src/
 │   └── tools/                 # Enhanced analysis tool system
 │       ├── base.py            # Base tool framework with caching and error handling
 │       ├── registry.py        # Tool registry with parallel execution support
+│       ├── rule_engine.py     # Standards-based rule engine for OWASP/NIST/PEP rules
 │       ├── context_tools.py   # Context7 MCP integration for documentation validation
 │       ├── analysis_tools.py  # Security, complexity, and quality analysis tools
 │       └── validation_tools.py # Performance, async, and framework-specific validation
@@ -131,6 +133,17 @@ src/
 | `ANTHROPIC_API_KEY` | Anthropic API key | Conditional | - |
 | `GOOGLE_API_KEY` | Google AI API key | Conditional | - |
 
+### Standards-Based Rule Engine Configuration
+
+| Variable | Description | Default | Options |
+|----------|-------------|---------|---------|
+| `RULE_ENGINE_ENABLED` | Enable standards-based rule engine | `true` | `true`, `false` |
+| `RULE_CACHE_TTL` | Cache TTL for fetched rules (seconds) | `3600` | Any positive integer |
+| `OWASP_INTEGRATION` | Enable OWASP Top 10 rule fetching | `true` | `true`, `false` |
+| `NIST_INTEGRATION` | Enable NIST Cybersecurity Framework | `true` | `true`, `false` |
+| `PYTHON_STANDARDS` | Enable Python PEP standards | `true` | `true`, `false` |
+| `FRAMEWORK_STANDARDS` | Enable framework-specific standards | `true` | `true`, `false` |
+
 ### Enhanced Tool System Configuration
 
 | Variable | Description | Default | Options |
@@ -194,8 +207,8 @@ src/
 The AI agent analyzes code across five key areas with enhanced tool support:
 
 - **✅ Correctness**: Logic errors, edge cases, algorithm issues, type hint validation
-- **🔒 Security**: OWASP vulnerability detection, input validation, authentication issues, hardcoded secrets
-- **⚡ Performance**: Bottlenecks, inefficient algorithms, async patterns, N+1 query detection
+- **🔒 Security**: OWASP Top 10 standards-based detection, NIST framework compliance, hardcoded secrets, authentication issues
+- **⚡ Performance**: Python performance guidelines, framework-specific optimizations, async patterns, N+1 query detection
 - **🛠️ Maintainability**: Code clarity, structure, complexity metrics, documentation quality
 - **📋 Best Practices**: Framework conventions, design patterns, API usage validation
 
@@ -209,17 +222,19 @@ For **Python codebases**, the tool system provides specialized analysis:
 - **Library Best Practices**: Ensures proper usage of imported libraries
 - **Evidence-Based Insights**: Provides documentation references for findings
 
-#### 🛡️ Security Pattern Analysis
-- **OWASP Top 10 Detection**: SQL injection, XSS, CSRF, weak crypto patterns
-- **Hardcoded Secrets**: API keys, passwords, tokens in code
-- **Input Validation**: Missing sanitization and validation checks
-- **Authentication Issues**: Weak auth patterns and session management
+#### 🛡️ Standards-Based Security Analysis
+- **OWASP Top 10 2021**: Dynamic rule fetching from current OWASP guidelines
+- **NIST Cybersecurity Framework**: Security controls and best practices
+- **Evidence-Based Detection**: SQL injection, XSS, CSRF with authoritative references
+- **Hardcoded Secrets**: API keys, passwords, tokens with secure alternatives
+- **Authentication Issues**: Standards-compliant auth patterns and session management
 
-#### ⚡ Performance Anti-Pattern Detection
-- **String Concatenation**: Inefficient string building in loops
-- **N+1 Queries**: Database query anti-patterns
-- **Async/Await Issues**: Improper async usage and blocking calls
-- **Memory Inefficiencies**: Large object creation and resource leaks
+#### ⚡ Standards-Based Performance Analysis
+- **Python Performance Guidelines**: Rules from official Python documentation
+- **Framework Best Practices**: FastAPI, Django, Flask performance standards
+- **Dynamic Rule Updates**: Current optimization patterns from authoritative sources
+- **Async/Await Standards**: Python asyncio documentation compliance
+- **Memory Efficiency**: Evidence-based resource management patterns
 
 #### 📊 Code Quality Metrics
 - **Complexity Analysis**: Cyclomatic complexity and maintainability scores
@@ -245,7 +260,7 @@ The merge request introduces authentication logic with some security concerns. E
 #### 🔴 Critical - SQL Injection Vulnerability
 **src/auth.py:25** - Security
 Direct string formatting in SQL query detected: `f"SELECT * FROM users WHERE username = '{username}'"`
-**Evidence**: SecurityPatternValidationTool detected injection pattern, Context7 validated against OWASP guidelines
+**Evidence**: Standards-based SecurityAnalysisTool detected pattern, OWASP Top 10 2021 guidelines
 💡 **Suggestion:** Use parameterized queries or ORM methods to prevent injection attacks
 **Reference**: [OWASP SQL Injection Prevention](https://owasp.org/www-community/attacks/SQL_Injection)
 
@@ -253,13 +268,13 @@ Direct string formatting in SQL query detected: `f"SELECT * FROM users WHERE use
 #### 🟡 High - Hardcoded Credentials
 **src/auth.py:8** - Security
 Hardcoded password detected: `ADMIN_PASSWORD = "secret123"`
-**Evidence**: SecurityAnalysisTool found credential pattern
+**Evidence**: OWASP/NIST standards-based detection with secure alternatives
 💡 **Suggestion:** Use environment variables or secure secret management
 
 #### 🟡 High - Performance Anti-Pattern
 **src/auth.py:18-20** - Performance
 String concatenation in loop detected (1000 iterations)
-**Evidence**: PerformancePatternTool identified inefficient string building
+**Evidence**: Python performance standards from official documentation
 💡 **Suggestion:** Use `''.join()` or list comprehension for better performance
 
 ### Medium Issues Found (1)
@@ -363,27 +378,36 @@ The tool system is built on a modular architecture with the following components
 
 ### Available Tools
 
+#### Standards-Based Rule Engine
+- **RuleEngine**: Central engine for dynamic rule fetching from authoritative sources
+- **OWASP Integration**: Real-time OWASP Top 10 2021 guidelines with severity levels
+- **NIST Framework**: Cybersecurity framework controls and recommendations
+- **Python Standards**: PEP compliance and official performance guidelines
+- **Framework Rules**: FastAPI, Django, Flask best practices from official docs
+
 #### Documentation & Validation Tools
 - **DocumentationLookupTool**: Validates API usage against official documentation via Context7 MCP
 - **APIUsageValidationTool**: Checks API calls and imports against library documentation
 - **SecurityPatternValidationTool**: Validates security patterns against OWASP guidelines with documentation references
 
 #### Security Analysis Tools
-- **SecurityAnalysisTool**: Detects OWASP Top 10 vulnerabilities, hardcoded secrets, and authentication issues
-- **SQL Injection Detection**: Pattern matching for injection vulnerabilities in database queries
-- **Credential Scanning**: Identifies hardcoded passwords, API keys, and tokens
+- **SecurityAnalysisTool**: Standards-based OWASP Top 10 and NIST framework detection
+- **Dynamic Rule Fetching**: Real-time security patterns from authoritative sources
+- **Evidence-Based Detection**: Security findings with official guideline references
+- **Credential Scanning**: OWASP-compliant hardcoded secret detection with alternatives
 
 #### Performance Analysis Tools
-- **PerformancePatternTool**: Detects common performance anti-patterns (string concatenation, N+1 queries)
-- **AsyncPatternValidationTool**: Validates proper async/await usage and identifies blocking calls
-- **Memory Efficiency Analysis**: Identifies potential memory leaks and inefficient object creation
+- **PerformancePatternTool**: Python documentation-based performance pattern detection
+- **Framework-Specific Rules**: Dynamic fetching of FastAPI, Django, Flask optimizations
+- **AsyncPatternValidationTool**: Python asyncio standards compliance validation
+- **Standards-Based Analysis**: Evidence-based performance recommendations with references
 
 #### Code Quality Tools
 - **ComplexityAnalysisTool**: Calculates cyclomatic complexity and maintainability metrics
 - **CodeQualityTool**: Assesses overall code quality with multiple quality dimensions
 - **TypeHintValidationTool**: Checks type annotation coverage and correctness
-- **ErrorHandlingTool**: Validates exception handling patterns and error propagation
-- **FrameworkSpecificTool**: Framework-specific validation (FastAPI, Django, Flask patterns)
+- **ErrorHandlingTool**: Python PEP-based exception handling pattern validation
+- **FrameworkSpecificTool**: Standards-based framework validation (FastAPI, Django, Flask patterns)
 
 ### Tool Configuration
 
@@ -404,6 +428,14 @@ DISABLED_TOOL_CATEGORIES=
 # Control specific tools
 ENABLED_TOOLS=SecurityAnalysisTool,PerformancePatternTool
 DISABLED_TOOLS=CodeQualityTool
+
+# Standards-Based Rule Engine configuration
+RULE_ENGINE_ENABLED=true
+RULE_CACHE_TTL=3600
+OWASP_INTEGRATION=true
+NIST_INTEGRATION=true
+PYTHON_STANDARDS=true
+FRAMEWORK_STANDARDS=true
 
 # Context7 MCP configuration
 CONTEXT7_ENABLED=true
