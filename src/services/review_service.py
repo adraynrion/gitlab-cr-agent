@@ -18,7 +18,7 @@ from tenacity import (
 
 from src.agents.code_reviewer import CodeReviewAgent
 from src.api.middleware import get_correlation_id, get_request_id
-from src.config.settings import settings
+from src.config.settings import get_settings
 from src.exceptions import (
     AIProviderException,
     GitLabAPIException,
@@ -127,6 +127,7 @@ class ReviewService:
         Returns:
             ReviewResult with comprehensive analysis
         """
+        settings = get_settings()
         logger.info(
             f"Starting review orchestration for MR {mr_event.object_attributes.iid}",
             extra={
@@ -238,6 +239,7 @@ class ReviewService:
         Raises:
             ReviewProcessException: If diff content exceeds maximum allowed size
         """
+        settings = get_settings()
         # Calculate total size before processing to prevent memory issues
         total_size = 0
         for diff_item in mr_diff:

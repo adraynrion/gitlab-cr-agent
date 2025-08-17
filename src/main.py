@@ -23,7 +23,7 @@ from src.api.middleware import (
     RequestTracingMiddleware,
     SecurityMiddleware,
 )
-from src.config.settings import settings
+from src.config.settings import get_settings
 from src.exceptions import (
     AIProviderException,
     ConfigurationException,
@@ -37,7 +37,7 @@ from src.utils.version import get_version
 
 # Configure structured logging
 logging.basicConfig(
-    level=settings.log_level,
+    level=get_settings().log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -115,6 +115,7 @@ async def initialize_resources():
         # Initialize review agent
         review_agent = await initialize_review_agent()
         app_state.mark_initialized(review_agent)
+        settings = get_settings()
         logger.info(f"Review agent initialized with model: {settings.ai_model}")
 
     except Exception as e:
@@ -163,6 +164,7 @@ async def cleanup_resources():
 async def lifespan(app: FastAPI):
     """Application lifecycle management with graceful shutdown"""
     # Startup
+    settings = get_settings()
     logger.info(f"Starting GitLab AI Reviewer in {settings.environment} mode")
     logger.info(f"GitLab URL: {settings.gitlab_url}")
     logger.info(
@@ -427,15 +429,16 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 # Add CORS middleware with secure defaults
-if settings.allowed_origins:
+_settings = get_settings()
+if _settings.allowed_origins:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.allowed_origins,
+        allow_origins=_settings.allowed_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST"],  # Restrict to required methods
         allow_headers=["Authorization", "X-Gitlab-Token", "Content-Type"],
     )
-    logger.info(f"CORS enabled for origins: {settings.allowed_origins}")
+    logger.info(f"CORS enabled for origins: {_settings.allowed_origins}")
 else:
     logger.warning("No CORS origins configured - CORS middleware not added")
 
@@ -452,6 +455,7 @@ app.include_router(health.router, prefix="/health", tags=["health"])
 @app.get("/")
 async def root():
     """Root endpoint with system status"""
+    settings = get_settings()
     return {
         "service": "GitLab AI Code Review Agent",
         "version": get_version(),
@@ -478,10 +482,11 @@ async def get_review_agent():
 
 
 if __name__ == "__main__":
+    _settings = get_settings()
     uvicorn.run(
         "src.main:app",
         host="0.0.0.0",
-        port=settings.port,
-        reload=settings.debug,
-        log_level=settings.log_level.lower(),
+        port=_settings.port,
+        reload=_settings.debug,
+        log_level=_settings.log_level.lower(),
     )
