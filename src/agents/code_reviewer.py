@@ -16,6 +16,14 @@ from tenacity import (
 
 from src.agents.providers import get_llm_model
 from src.agents.tools import ToolContext, ToolRegistry
+from src.agents.tools.mcp_context7 import (
+    LibraryDocumentation,
+    LibraryResolutionResult,
+    get_library_docs,
+    resolve_library_id,
+    search_documentation,
+    validate_api_usage,
+)
 from src.config.settings import get_settings
 from src.exceptions import AIProviderException, ReviewProcessException
 from src.models.review_models import ReviewContext, ReviewResult
@@ -34,13 +42,31 @@ REVIEW FRAMEWORK:
 4. **Maintainability**: Assess code clarity, structure, documentation quality
 5. **Best Practices**: Check language conventions, design patterns, testing
 
-TOOL-ENHANCED ANALYSIS:
-You have access to specialized tools that provide evidence-based insights:
-- Documentation lookup tools that verify API usage against official documentation
-- Security pattern validators that check against known vulnerabilities
-- Performance analyzers that detect common anti-patterns
-- Code quality tools that assess maintainability metrics
-- Framework-specific validators for best practices
+SIMPLIFIED TOOL ARCHITECTURE:
+You have access to a simplified, Context7-based tool system that provides evidence-based insights:
+- Context7 Documentation Validation Tool: Validates code against current official documentation
+- Library import detection and analysis
+- Real-time documentation lookup when Context7 MCP is available
+- Graceful degradation when Context7 is unavailable
+
+CONTEXT7 MCP INTEGRATION:
+You have direct access to Context7's comprehensive documentation database through these tools:
+- resolve_library_documentation(library_name): Get Context7 library ID and metadata
+- get_documentation(library_id, topic, max_tokens): Fetch current docs and code examples
+- search_library_docs(query, libraries, max_results): Search across multiple libraries
+- validate_code_against_docs(library_name, code_snippet, context): Validate API usage
+
+IMPORTANT: Context7 MCP may not always be available. When Context7 is unavailable:
+- Clearly inform the user that Context7 documentation validation is not available
+- Explain that the review is based on your knowledge only for affected libraries
+- Still provide a thorough review using your training knowledge
+- Be transparent about limitations without Context7 verification
+
+Use these Context7 tools to:
+- Verify API usage patterns against official documentation
+- Find relevant code examples and best practices
+- Check for deprecated methods or patterns
+- Get authoritative references for your recommendations
 
 Use tool results to support your analysis with concrete evidence and references.
 
@@ -116,9 +142,8 @@ class CodeReviewAgent:
         if settings.tools_enabled:
             # Import tool modules to trigger registration
             try:
-                import src.agents.tools.analysis_tools  # noqa: F401
-                import src.agents.tools.context_tools  # noqa: F401
-                import src.agents.tools.validation_tools  # noqa: F401
+                # Import new unified Context7-based tools
+                import src.agents.tools.unified_context7_tools  # noqa: F401
 
                 # Configure registry from settings
                 tool_settings = {
@@ -257,6 +282,44 @@ class CodeReviewAgent:
                 else f"No evidence found for {topic}"
             )
 
+        # Context7 MCP Tools for direct documentation access
+        @self.agent.tool
+        async def resolve_library_documentation(
+            ctx: RunContext[ReviewDependencies], library_name: str
+        ) -> LibraryResolutionResult:
+            """Resolve a library name to get its Context7 library ID and metadata"""
+            return resolve_library_id(library_name)
+
+        @self.agent.tool
+        async def get_documentation(
+            ctx: RunContext[ReviewDependencies],
+            context7_library_id: str,
+            topic: Optional[str] = None,
+            max_tokens: int = 2000,
+        ) -> LibraryDocumentation:
+            """Get up-to-date documentation for a library from Context7"""
+            return get_library_docs(context7_library_id, topic, max_tokens)
+
+        @self.agent.tool
+        async def search_library_docs(
+            ctx: RunContext[ReviewDependencies],
+            query: str,
+            libraries: Optional[List[str]] = None,
+            max_results: int = 5,
+        ) -> List[Dict[str, Any]]:
+            """Search for documentation across multiple libraries"""
+            return search_documentation(query, libraries, max_results)
+
+        @self.agent.tool
+        async def validate_code_against_docs(
+            ctx: RunContext[ReviewDependencies],
+            library_name: str,
+            code_snippet: str,
+            context: Optional[str] = None,
+        ) -> Dict[str, Any]:
+            """Validate API usage against official documentation"""
+            return validate_api_usage(library_name, code_snippet, context)
+
         @self.agent.tool
         async def get_metrics_summary(
             ctx: RunContext[ReviewDependencies],
@@ -336,6 +399,87 @@ class CodeReviewAgent:
                     for i, tool_result in enumerate(ctx.deps.tool_results)
                 },
             }
+
+        @self.agent.tool
+        async def check_context7_availability_status(
+            ctx: RunContext[ReviewDependencies],
+        ) -> Dict[str, Any]:
+            """Check Context7 MCP availability status and report limitations to user"""
+            if not ctx.deps.tool_results:
+                return {"message": "No tool results available to check Context7 status"}
+
+            context7_status: Dict[str, Any] = {
+                "overall_available": True,
+                "unavailable_libraries": [],
+                "available_libraries": [],
+                "limitations": [],
+                "user_message": "",
+            }
+
+            # Check for Context7 availability information in tool results
+            for tool_result in ctx.deps.tool_results:
+                evidence = tool_result.get("evidence", {})
+
+                # Check for Context7 unavailability evidence
+                if "context7_unavailability" in evidence:
+                    unavailability_info = evidence["context7_unavailability"]
+                    unavailable_libs = unavailability_info.get(
+                        "unavailable_libraries", []
+                    )
+
+                    for lib_info in unavailable_libs:
+                        context7_status["unavailable_libraries"].append(
+                            f"{lib_info['library']}: {lib_info['reason']}"
+                        )
+
+                    context7_status["limitations"].append(
+                        unavailability_info.get("impact", "")
+                    )
+                    context7_status["overall_available"] = False
+
+                # Check metrics for Context7 availability
+                metrics = tool_result.get("metrics", {})
+                if "context7_availability_rate" in metrics:
+                    availability_rate = metrics["context7_availability_rate"]
+                    validated_libs = metrics.get("libraries_validated_with_context7", 0)
+                    unavailable_libs_count = metrics.get(
+                        "libraries_unavailable_context7", 0
+                    )
+
+                    if availability_rate < 1.0:
+                        context7_status["overall_available"] = False
+                        context7_status["limitations"].append(
+                            f"Context7 availability: {availability_rate:.0%} ({validated_libs} available, {unavailable_libs_count} unavailable)"
+                        )
+
+            # Generate user-friendly message
+            if context7_status["overall_available"]:
+                context7_status[
+                    "user_message"
+                ] = "✅ Context7 MCP documentation validation is fully available for this review."
+            else:
+                limitations_text = "\n".join(
+                    [f"- {limitation}" for limitation in context7_status["limitations"]]
+                )
+                unavailable_text = "\n".join(
+                    [f"- {lib}" for lib in context7_status["unavailable_libraries"]]
+                )
+
+                context7_status[
+                    "user_message"
+                ] = f"""⚠️ Context7 MCP Documentation Validation Status:
+
+Context7 documentation validation was not fully available for this review.
+
+Limitations:
+{limitations_text}
+
+Libraries affected:
+{unavailable_text}
+
+Impact: The code review for affected libraries is based on the AI agent's training knowledge only, without real-time documentation verification. The review quality remains high, but lacks the most current documentation validation for these specific libraries."""
+
+            return context7_status
 
     @retry(
         stop=stop_after_attempt(3),
@@ -451,29 +595,40 @@ class CodeReviewAgent:
         {diff_content}
 
         TOOL ANALYSIS AVAILABLE:
-        You have access to specialized analysis tools through the get_tool_insights, get_evidence_references,
-        get_metrics_summary, and get_all_tool_results functions. These tools have already analyzed the code
-        and found {len([r for r in tool_results if r["success"]])} successful analyses covering:
-        {", ".join(list(set(str(r["category"]) for r in tool_results if r["success"])))}
+        You have access to Context7-based analysis tools through get_tool_insights, get_evidence_references,
+        get_metrics_summary, check_context7_availability_status, and get_all_tool_results functions. 
+        
+        Tool execution completed: {len(tool_results)} tools ran
+        Successful analyses: {len([r for r in tool_results if r["success"]])} tools completed successfully
+        Tool categories executed: {", ".join(list(set(str(r["category"]) for r in tool_results if r["success"]))) if [r for r in tool_results if r["success"]] else "No successful tool executions"}
+        
+        Context7 Status: {'Available' if any('context7_availability_rate' in r.get('metrics', {}) and r['metrics']['context7_availability_rate'] > 0 for r in tool_results) else 'Check required - use check_context7_availability_status() first'}
 
         INSTRUCTIONS:
-        1. Use get_tool_insights() for each relevant category (security, performance, correctness, maintainability, etc.)
-        2. Use get_evidence_references() to find supporting documentation and evidence
-        3. Use get_metrics_summary() to get quantitative analysis
-        4. Integrate tool findings with your own analysis
-        5. Prioritize issues backed by tool evidence
-        6. Include all references and evidence in your review
+        1. FIRST: Use check_context7_availability_status() to check Context7 MCP status and inform the user of any limitations
+        2. Use get_tool_insights() for documentation analysis (the primary tool category in this simplified architecture)
+        3. Use get_evidence_references() to find Context7 documentation and evidence
+        4. Use get_metrics_summary() to get Context7 availability metrics and library validation status
+        5. If Context7 is available, leverage real-time documentation validation results
+        6. If Context7 is unavailable, clearly explain limitations and rely on your training knowledge
+        7. Integrate Context7 findings (when available) with your own analysis
+        8. Prioritize issues backed by Context7 documentation evidence when available
 
         Provide a comprehensive review focusing on:
-        1. Critical issues that must be fixed (prioritize tool-detected issues)
-        2. Security vulnerabilities (use security tool insights)
-        3. Performance concerns (use performance tool insights)
-        4. Code quality and maintainability (use quality tool insights)
-        5. Best practices and documentation compliance (use evidence and references)
-        6. Positive aspects worth highlighting
+        1. Context7 availability status and any limitations (always start with this)
+        2. Critical issues that must be fixed (prioritize Context7-validated issues when available)
+        3. Library usage validation against official documentation (when Context7 is available)
+        4. Security vulnerabilities and best practices (leverage your knowledge + Context7 evidence)
+        5. Performance concerns and optimization opportunities
+        6. Code quality and maintainability improvements
+        7. Positive aspects worth highlighting
 
-        IMPORTANT: Include ALL tool findings, evidence, and references without limitation.
-        Do not summarize or truncate tool results - provide complete information.
+        IMPORTANT: 
+        - Always be transparent about Context7 availability status
+        - Include ALL Context7 findings, evidence, and references when available
+        - When Context7 is unavailable, clearly state review limitations
+        - Provide thorough analysis using your training knowledge regardless of Context7 status
+        - Do not summarize or truncate any available Context7 results
         """
 
         try:

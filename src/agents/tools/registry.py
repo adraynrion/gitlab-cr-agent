@@ -299,16 +299,6 @@ class ToolRegistry:
         """
         import asyncio
 
-        from src.agents.tools.language_detection import LanguageRouter
-
-        # Initialize language detection and routing
-        language_router = LanguageRouter()
-
-        # Populate language context in the tool context
-        context.language_context = language_router.get_language_context(
-            context.file_changes
-        )
-
         # Determine which tools to execute
         tools_to_run = set()
 
@@ -328,20 +318,11 @@ class ToolRegistry:
         if not categories and not priorities:
             tools_to_run = set(self.get_enabled_tools())
 
-        # Apply language-aware filtering to remove irrelevant tools
-        original_count = len(tools_to_run)
-        tools_to_run = {
-            tool
-            for tool in tools_to_run
-            if not language_router.should_skip_tool(tool.name, context.file_changes)
-        }
-        filtered_count = len(tools_to_run)
-
-        if filtered_count < original_count:
-            logger.info(
-                f"Language-aware filtering: {original_count} → {filtered_count} tools "
-                f"(primary language: {context.language_context.get('primary_language', 'unknown')})"
-            )
+        # Language-aware filtering is simplified in the Context7-based architecture
+        # The unified Context7 tool handles language detection internally via import parsing
+        logger.debug(
+            f"Executing {len(tools_to_run)} tools in simplified Context7 architecture"
+        )
 
         if not tools_to_run:
             logger.warning("No tools to execute after language filtering")

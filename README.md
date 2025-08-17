@@ -50,18 +50,14 @@ src/
 ├── main.py                    # FastAPI application entry point with lifespan management
 ├── exceptions.py              # Custom exception hierarchy for structured error handling
 ├── agents/
-│   ├── code_reviewer.py       # PydanticAI review agent with enhanced tool system
+│   ├── code_reviewer.py       # PydanticAI review agent with Context7 MCP tools
 │   ├── providers.py           # Multi-LLM provider support (OpenAI, Anthropic, Google)
-│   └── tools/                 # Language-aware analysis tool system
+│   └── tools/                 # Simplified Context7-based validation system
 │       ├── base.py            # Base tool framework with caching and language context
 │       ├── registry.py        # Tool registry with language-aware routing and parallel execution
 │       ├── language_detection.py # Multi-language detection and routing system
-│       ├── rule_engine.py     # Language-aware rule engine for OWASP/NIST/PEP/framework rules
-│       └── python/            # Python-specific analysis tools package
-│           ├── __init__.py    # Python tools package with all tool exports
-│           ├── analysis_tools.py  # Python security, complexity, and quality analysis
-│           ├── context_tools.py   # Python Context7 MCP integration tools
-│           └── validation_tools.py # Python performance, async, and framework validation
+│       ├── mcp_context7.py    # Context7 MCP tools (resolve, validate, search, get_docs)
+│       └── unified_context7_tools.py # Single unified tool using Context7 validate_code_against_docs
 ├── api/
 │   ├── webhooks.py            # GitLab webhook handlers with rate limiting
 │   ├── health.py              # Health check endpoints (liveness, readiness, status)
@@ -380,8 +376,8 @@ The tool system is built on a modular, language-aware architecture:
 - **Language Detection** (`src/agents/tools/language_detection.py`): Multi-language file extension detection and smart tool routing
 - **Base Framework** (`src/agents/tools/base.py`): Abstract tool interface with language context, caching, and error handling
 - **Tool Registry** (`src/agents/tools/registry.py`): Language-aware registry with intelligent tool filtering and parallel execution
-- **Rule Engine** (`src/agents/tools/rule_engine.py`): Language-specific rule fetching from authoritative sources (OWASP, NIST, PEPs)
-- **Python Tools Package** (`src/agents/tools/python/`): Organized collection of specialized Python analysis tools with framework-specific insights
+- **Context7 MCP Integration** (`src/agents/tools/mcp_context7.py`): Direct Context7 tools for documentation validation
+- **Unified Validation Tool** (`src/agents/tools/unified_context7_tools.py`): Single tool using Context7's validate_code_against_docs
 
 ### Language Detection & Routing
 
@@ -410,8 +406,8 @@ Swift: .swift
 
 ### Available Tools
 
-#### Standards-Based Rule Engine
-- **RuleEngine**: Central engine for dynamic rule fetching from authoritative sources
+#### Context7 Documentation Validation
+- **Context7DocumentationValidationTool**: Single unified tool for all library validation
 - **OWASP Integration**: Real-time OWASP Top 10 2021 guidelines with severity levels
 - **NIST Framework**: Cybersecurity framework controls and recommendations
 - **Python Standards**: PEP compliance and official performance guidelines

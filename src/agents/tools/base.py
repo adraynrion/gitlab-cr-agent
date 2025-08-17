@@ -54,9 +54,6 @@ class ToolContext:
     # Caching
     cache: Dict[str, Any] = field(default_factory=dict)
 
-    # Language context (populated by language detection system)
-    language_context: Dict[str, Any] = field(default_factory=dict)
-
     # Additional metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
 
