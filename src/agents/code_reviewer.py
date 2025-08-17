@@ -596,12 +596,12 @@ Impact: The code review for affected libraries is based on the AI agent's traini
 
         TOOL ANALYSIS AVAILABLE:
         You have access to Context7-based analysis tools through get_tool_insights, get_evidence_references,
-        get_metrics_summary, check_context7_availability_status, and get_all_tool_results functions. 
-        
+        get_metrics_summary, check_context7_availability_status, and get_all_tool_results functions.
+
         Tool execution completed: {len(tool_results)} tools ran
         Successful analyses: {len([r for r in tool_results if r["success"]])} tools completed successfully
         Tool categories executed: {", ".join(list(set(str(r["category"]) for r in tool_results if r["success"]))) if [r for r in tool_results if r["success"]] else "No successful tool executions"}
-        
+
         Context7 Status: {'Available' if any('context7_availability_rate' in r.get('metrics', {}) and r['metrics']['context7_availability_rate'] > 0 for r in tool_results) else 'Check required - use check_context7_availability_status() first'}
 
         INSTRUCTIONS:
@@ -623,7 +623,7 @@ Impact: The code review for affected libraries is based on the AI agent's traini
         6. Code quality and maintainability improvements
         7. Positive aspects worth highlighting
 
-        IMPORTANT: 
+        IMPORTANT:
         - Always be transparent about Context7 availability status
         - Include ALL Context7 findings, evidence, and references when available
         - When Context7 is unavailable, clearly state review limitations
