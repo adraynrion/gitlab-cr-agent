@@ -50,23 +50,23 @@ dev-install: install ## Alias for install
 # Testing
 test: ## Run all tests
 	@echo "$(BLUE)Running tests...$(RESET)"
-	@$(VENV_PATH)/bin/$(PYTHON) -m pytest tests/ -v
+	@TESTING=true $(VENV_PATH)/bin/$(PYTHON) -m pytest tests/ -v
 
 test-unit: ## Run only unit tests
 	@echo "$(BLUE)Running unit tests...$(RESET)"
-	@$(VENV_PATH)/bin/$(PYTHON) -m pytest tests/unit/ -v
+	@TESTING=true $(VENV_PATH)/bin/$(PYTHON) -m pytest tests/unit/ -v
 
 test-integration: ## Run only integration tests
 	@echo "$(BLUE)Running integration tests...$(RESET)"
-	@$(VENV_PATH)/bin/$(PYTHON) -m pytest tests/integration/ -v
+	@TESTING=true $(VENV_PATH)/bin/$(PYTHON) -m pytest tests/integration/ -v
 
 test-fast: ## Run tests with minimal output
 	@echo "$(BLUE)Running fast tests...$(RESET)"
-	@$(VENV_PATH)/bin/$(PYTHON) -m pytest tests/ -q
+	@TESTING=true $(VENV_PATH)/bin/$(PYTHON) -m pytest tests/ -q
 
 test-failed: ## Run only previously failed tests
 	@echo "$(BLUE)Running previously failed tests...$(RESET)"
-	@$(VENV_PATH)/bin/$(PYTHON) -m pytest --lf -v
+	@TESTING=true $(VENV_PATH)/bin/$(PYTHON) -m pytest --lf -v
 
 test-watch: ## Run tests in watch mode (requires pytest-watch)
 	@echo "$(BLUE)Running tests in watch mode...$(RESET)"
@@ -75,14 +75,14 @@ test-watch: ## Run tests in watch mode (requires pytest-watch)
 # Coverage
 coverage: ## Run tests with coverage report
 	@echo "$(BLUE)Running tests with coverage...$(RESET)"
-	@$(VENV_PATH)/bin/$(PYTHON) -m pytest tests/ \
+	@TESTING=true $(VENV_PATH)/bin/$(PYTHON) -m pytest tests/ \
 		--cov=src \
 		--cov-report=term-missing \
 		--cov-fail-under=$(COVERAGE_MIN)
 
 html-cov: ## Generate HTML coverage report
 	@echo "$(BLUE)Generating HTML coverage report...$(RESET)"
-	@$(VENV_PATH)/bin/$(PYTHON) -m pytest tests/ \
+	@TESTING=true $(VENV_PATH)/bin/$(PYTHON) -m pytest tests/ \
 		--cov=src \
 		--cov-report=html \
 		--cov-report=term-missing
@@ -90,7 +90,7 @@ html-cov: ## Generate HTML coverage report
 
 coverage-xml: ## Generate XML coverage report (for CI)
 	@echo "$(BLUE)Generating XML coverage report...$(RESET)"
-	@$(VENV_PATH)/bin/$(PYTHON) -m pytest tests/ \
+	@TESTING=true $(VENV_PATH)/bin/$(PYTHON) -m pytest tests/ \
 		--cov=src \
 		--cov-report=xml \
 		--cov-report=term-missing
@@ -187,7 +187,7 @@ ci: ## Run full CI pipeline (tests + quality + coverage)
 	@$(MAKE) imports-check
 	@$(MAKE) lint
 	@$(MAKE) typecheck
-	@$(MAKE) coverage
+	@TESTING=true $(MAKE) coverage
 	@echo "$(GREEN)✓ CI pipeline completed successfully$(RESET)"
 
 all: fix quality test ## Fix code issues, run quality checks, and test

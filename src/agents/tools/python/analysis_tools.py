@@ -153,88 +153,96 @@ class PythonSecurityAnalysisTool(BaseTool):
     def _detect_pattern_in_code(
         self, diff_content: str, pattern_name: str, pattern_info: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Detect specific security pattern in code based on pattern type"""
+        """Detect specific security pattern in code using AST analysis + text fallback"""
+        from .code_parser import get_parser
+
         findings = []
+        parser = get_parser()
 
-        # Define detection regex patterns based on pattern type
-        detection_patterns = {
-            "sql_injection": [
-                r"\+.*(?:execute|query)\s*\([^)]*%[^)]*\)",
-                r"\+.*(?:execute|query)\s*\([^)]*\+[^)]*\)",
-                r"\+.*(?:execute|query)\s*\([^)]*f[\"'][^\"']*\{[^}]*\}",
-            ],
-            "code_injection": [
-                r"\+.*(?:eval|exec)\s*\(",
-            ],
-            "hardcoded_secrets": [
-                # Only match actual hardcoded strings, not environment variables
-                r'\+.*(?:password|secret|key|token)\s*=\s*["\'][a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};\'\\:"|,.<>\?~`]{8,}["\']',
-                r'\+.*(?:PASSWORD|SECRET|KEY|TOKEN)\s*=\s*["\'][a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};\'\\:"|,.<>\?~`]{8,}["\']',
-            ],
-            "weak_crypto": [
-                r"\+.*(?:md5|sha1)\s*\(",
-                r"\+.*hashlib\.(?:md5|sha1)\s*\(",
-            ],
-            "file_traversal": [
-                r"\+.*open\s*\([^)]*\.\./[^)]*\)",
-                r"\+.*Path\s*\([^)]*\.\./[^)]*\)",
-            ],
-            "cors_wildcard": [
-                r'\+.*allow_origins.*=.*\[.*["\']\*["\'].*\]',
-                r'\+.*CORS.*origins.*=.*["\']\*["\']',
-            ],
-            "insecure_random": [
-                r"\+.*random\.random\s*\(",
-                r"\+.*random\.choice\s*\(",
-            ],
-            "path_injection": [
-                r"\+.*os\.path\.join\s*\([^)]*\.\./",
-                r"\+.*pathlib\.Path\s*\([^)]*\.\./",
-            ],
-        }
+        # Use AST-based security pattern detection first
+        ast_patterns = parser.extract_security_patterns(diff_content)
 
-        # Get regex patterns for this pattern type
-        regexes = detection_patterns.get(pattern_name, [])
-
-        for regex in regexes:
-            matches = re.finditer(regex, diff_content, re.IGNORECASE | re.MULTILINE)
-            for match in matches:
-                matched_text = match.group(0).strip()
-
-                # Skip false positives for hardcoded secrets
-                if pattern_name == "hardcoded_secrets":
-                    # Skip if using environment variables or secure functions
-                    if any(
-                        secure_pattern in matched_text.lower()
-                        for secure_pattern in [
-                            "os.getenv",
-                            "os.environ",
-                            "getenv(",
-                            "environ[",
-                            "config.",
-                            "settings.",
-                            ".env",
-                            "vault.",
-                            "secret_manager",
-                        ]
-                    ):
-                        continue
-
+        # Filter patterns by type
+        for pattern in ast_patterns:
+            if pattern["type"] == pattern_name:
                 findings.append(
                     {
                         "pattern": pattern_name,
-                        "severity": pattern_info.get("severity", "medium"),
+                        "severity": pattern_info.get("severity", pattern["severity"]),
                         "description": pattern_info.get(
-                            "description", f"Security issue: {pattern_name}"
+                            "description", pattern["description"]
                         ),
                         "recommendation": pattern_info.get(
-                            "recommendation", "Follow security best practices"
+                            "recommendation", "Review and fix security issue"
                         ),
-                        "references": pattern_info.get("references", []),
-                        "evidence": matched_text,
-                        "line_number": diff_content[: match.start()].count("\n") + 1,
+                        "evidence": pattern["evidence"],
+                        "line": pattern.get("line", 0),
                     }
                 )
+
+        # Fallback to text-based detection for patterns AST might miss
+        fallback_patterns = self._detect_text_patterns(diff_content, pattern_name)
+        findings.extend(fallback_patterns)
+
+        return findings
+
+    def _detect_text_patterns(
+        self, diff_content: str, pattern_name: str
+    ) -> List[Dict[str, Any]]:
+        """Text-based pattern detection for patterns AST might miss"""
+        findings = []
+        added_lines = [
+            line.strip()
+            for line in diff_content.split("\n")
+            if line.strip().startswith("+") and not line.strip().startswith("+++")
+        ]
+
+        for i, line in enumerate(added_lines):
+            code_line = line[1:].strip().lower()
+
+            # CORS wildcard detection (config-based, hard to detect with AST)
+            if pattern_name == "cors_wildcard":
+                if "allow_origins" in code_line and "*" in code_line:
+                    findings.append(
+                        {
+                            "pattern": pattern_name,
+                            "severity": "high",
+                            "description": "CORS wildcard configuration detected",
+                            "recommendation": "Specify explicit origins instead of wildcard",
+                            "evidence": line.strip(),
+                            "line": i + 1,
+                        }
+                    )
+
+            # Insecure random detection
+            elif pattern_name == "insecure_random":
+                if "random.random(" in code_line or "random.choice(" in code_line:
+                    findings.append(
+                        {
+                            "pattern": pattern_name,
+                            "severity": "medium",
+                            "description": "Insecure random number generation",
+                            "recommendation": "Use secrets module for cryptographic purposes",
+                            "evidence": line.strip(),
+                            "line": i + 1,
+                        }
+                    )
+
+            # File traversal detection
+            elif pattern_name == "file_traversal":
+                if "../" in code_line and (
+                    "open(" in code_line or "path(" in code_line
+                ):
+                    findings.append(
+                        {
+                            "pattern": pattern_name,
+                            "severity": "high",
+                            "description": "Potential path traversal vulnerability",
+                            "recommendation": "Validate and sanitize file paths",
+                            "evidence": line.strip(),
+                            "line": i + 1,
+                        }
+                    )
 
         return findings
 
@@ -340,63 +348,41 @@ class PythonComplexityAnalysisTool(BaseTool):
             )
 
     def _analyze_complexity(self, diff_content: str) -> List[Dict[str, Any]]:
-        """Analyze cyclomatic complexity of functions in the diff"""
+        """Analyze cyclomatic complexity of functions using AST parsing"""
+        from .code_parser import get_parser
+
         file_analyses = []
+        parser = get_parser()
 
-        # Extract function definitions from diff
-        function_pattern = r"\+\s*(?:async\s+)?def\s+(\w+)\s*\([^)]*\):"
-        functions = re.finditer(function_pattern, diff_content)
+        # Extract functions using AST parsing
+        functions = parser.extract_functions(diff_content)
 
-        current_file = "unknown"
-        for func_match in functions:
-            func_name = func_match.group(1)
+        for func_info in functions:
+            func_name = func_info["name"]
+            complexity_data = func_info["complexity_indicators"]
 
-            # Get the function body (simplified approach)
-            start_pos = func_match.end()
-            lines = diff_content[start_pos:].split("\n")
-
-            func_body = []
-            indent_level = None
-
-            for line in lines:
-                if line.startswith("+"):
-                    line_content = line[1:].strip()
-                    if not line_content:
-                        continue
-
-                    # Determine indentation level
-                    if indent_level is None and line_content:
-                        indent_level = len(line[1:]) - len(line[1:].lstrip())
-
-                    # Check if we're still in the function
-                    current_indent = len(line[1:]) - len(line[1:].lstrip())
-                    if (
-                        line_content
-                        and indent_level is not None
-                        and current_indent <= indent_level
-                        and not line_content.startswith("#")
-                    ):
-                        break
-
-                    func_body.append(line_content)
-
-            # Calculate complexity
-            complexity = self._calculate_complexity("\n".join(func_body))
+            # Calculate overall complexity score
+            complexity = (
+                complexity_data.get("branches", 0)
+                + complexity_data.get("loops", 0)
+                + complexity_data.get("nested_functions", 0)
+                + complexity_data.get("try_blocks", 0)
+                + 1  # Base complexity
+            )
 
             file_analyses.append(
                 {
-                    "file_path": current_file,
+                    "file_path": "modified_file",
                     "functions": [
                         {
                             "name": func_name,
                             "complexity": complexity,
-                            "line_number": diff_content[: func_match.start()].count(
-                                "\n"
-                            )
-                            + 1,
-                            "lines_of_code": len(
-                                [line for line in func_body if line.strip()]
-                            ),
+                            "line_number": func_info["line_number"],
+                            "lines_of_code": complexity_data.get("lines", 0),
+                            "is_async": func_info["is_async"],
+                            "has_docstring": func_info["has_docstring"],
+                            "decorators": func_info["decorators"],
+                            "complexity_breakdown": complexity_data,
                         }
                     ],
                 }
@@ -486,9 +472,13 @@ class PythonCodeQualityTool(BaseTool):
         issues = []
         suggestions = []
 
-        # Check function naming (should be snake_case)
+        # Check function naming (should be snake_case) using cached patterns
+        from .code_parser import get_compiled_patterns
+
+        patterns_cache = get_compiled_patterns()
+
         func_pattern = r"\+\s*def\s+([A-Z][a-zA-Z0-9_]*)\s*\("
-        bad_func_names = re.findall(func_pattern, diff_content)
+        bad_func_names = patterns_cache.findall(func_pattern, diff_content)
 
         for func_name in bad_func_names:
             issues.append(

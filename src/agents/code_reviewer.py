@@ -16,7 +16,7 @@ from tenacity import (
 
 from src.agents.providers import get_llm_model
 from src.agents.tools import ToolContext, ToolRegistry
-from src.config.settings import settings
+from src.config.settings import get_settings
 from src.exceptions import AIProviderException, ReviewProcessException
 from src.models.review_models import ReviewContext, ReviewResult
 
@@ -88,6 +88,7 @@ class CodeReviewAgent:
 
     def __init__(self, model_name: Optional[str] = None):
         """Initialize the review agent with specified model"""
+        settings = get_settings()
         self.model_name = model_name or settings.ai_model
         self.model = get_llm_model(self.model_name)
 
@@ -111,6 +112,7 @@ class CodeReviewAgent:
 
     def _initialize_tools(self):
         """Initialize the tool system with settings"""
+        settings = get_settings()
         if settings.tools_enabled:
             # Import tool modules to trigger registration
             try:
@@ -345,6 +347,7 @@ class CodeReviewAgent:
     ) -> ReviewResult:
         """Perform comprehensive, tool-enhanced code review on merge request with retry logic"""
 
+        settings = get_settings()
         logger.info(f"Starting tool-enhanced review for MR {context.merge_request_iid}")
 
         # Execute tools first to gather evidence-based insights
@@ -511,6 +514,7 @@ class CodeReviewAgent:
 async def initialize_review_agent() -> CodeReviewAgent:
     """Factory function to initialize the review agent"""
     try:
+        settings = get_settings()
         agent = CodeReviewAgent(model_name=settings.ai_model)
         logger.info(
             f"Review agent initialized successfully with model: {settings.ai_model}"
@@ -518,6 +522,7 @@ async def initialize_review_agent() -> CodeReviewAgent:
         return agent
     except Exception as e:
         logger.error(f"Failed to initialize review agent: {e}")
+        settings = get_settings()
         raise ReviewProcessException(
             message="Failed to initialize AI review agent",
             details={"model_name": settings.ai_model},

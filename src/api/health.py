@@ -9,7 +9,7 @@ from typing import Any, Dict
 import httpx
 from fastapi import APIRouter, HTTPException
 
-from src.config.settings import settings
+from src.config.settings import get_settings
 from src.utils.version import get_version
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ async def readiness_check() -> Dict[str, Any]:
     Readiness probe - checks if the service is ready to accept traffic
     Used by Kubernetes/Docker to determine if container should receive requests
     """
+    settings = get_settings()
     checks = {}
     all_healthy = True
 
@@ -118,6 +119,7 @@ async def status() -> Dict[str, Any]:
     """
     Detailed status endpoint for monitoring and debugging
     """
+    settings = get_settings()
     return {
         "service": "GitLab AI Code Review Agent",
         "version": get_version(),

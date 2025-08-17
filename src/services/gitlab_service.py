@@ -14,7 +14,7 @@ from tenacity import (
 )
 
 from src.api.middleware import get_correlation_id, get_request_id
-from src.config.settings import settings
+from src.config.settings import get_settings
 from src.exceptions import GitLabAPIException
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ class GitLabService:
     """Service for interacting with GitLab API with circuit breaker protection"""
 
     def __init__(self):
+        settings = get_settings()
         self.base_url = f"{settings.gitlab_url}/api/v4"
         self.headers = {
             "PRIVATE-TOKEN": settings.gitlab_token,

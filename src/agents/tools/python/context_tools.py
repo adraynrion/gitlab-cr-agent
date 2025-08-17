@@ -219,31 +219,54 @@ class PythonDocumentationLookupTool(BaseTool):
             )
 
     def _extract_imports(self, diff_content: str) -> List[Dict[str, Any]]:
-        """Extract import statements from diff content"""
+        """Extract import statements from diff content using fast string operations"""
         imports = []
 
-        # Python import patterns
-        import_patterns = [
-            r"\+\s*import\s+(\w+)",
-            r"\+\s*from\s+(\w+)\s+import",
-            r"\+\s*from\s+(\w+)\.(\w+)\s+import",
+        # Process only added lines (lines starting with +)
+        added_lines = [
+            line.strip()
+            for line in diff_content.split("\n")
+            if line.strip().startswith("+") and not line.strip().startswith("+++")
         ]
 
-        for pattern in import_patterns:
-            matches = re.findall(pattern, diff_content)
-            for match in matches:
-                if isinstance(match, tuple):
-                    library = match[0]
-                    module = match[1] if len(match) > 1 else None
-                else:
-                    library = match
-                    module = None
+        for line in added_lines:
+            # Remove the + prefix and normalize whitespace
+            code_line = line[1:].strip()
 
-                # Skip standard library imports
-                if library not in ["os", "sys", "time", "json", "re", "typing"]:
-                    imports.append(
-                        {"library": library, "module": module, "pattern": pattern}
-                    )
+            # Skip empty lines and comments
+            if not code_line or code_line.startswith("#"):
+                continue
+
+            library = None
+            module = None
+
+            # Fast string-based import detection (replaces 3 regex patterns)
+            if code_line.startswith("import "):
+                # Simple import: "import library"
+                parts = code_line.split()
+                if len(parts) >= 2:
+                    library = parts[1].split(".")[0]  # Get base library name
+            elif code_line.startswith("from "):
+                # From import: "from library import ..." or "from library.module import ..."
+                if " import " in code_line:
+                    from_part = code_line.split(" import ")[0]
+                    library_path = from_part[5:]  # Remove "from "
+                    if "." in library_path:
+                        parts = library_path.split(".")
+                        library = parts[0]
+                        module = parts[1]
+                    else:
+                        library = library_path
+
+            # Add valid library imports (skip standard library)
+            if library and library not in ["os", "sys", "time", "json", "re", "typing"]:
+                imports.append(
+                    {
+                        "library": library,
+                        "module": module,
+                        "line": code_line,  # Store the actual import line instead of regex pattern
+                    }
+                )
 
         return imports
 

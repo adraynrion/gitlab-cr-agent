@@ -17,7 +17,7 @@ from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 
-from src.config.settings import settings
+from src.config.settings import get_settings
 from src.exceptions import AIProviderException, ConfigurationException
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 def get_openai_model() -> OpenAIModel:
     """Configure OpenAI model with proper error handling"""
     try:
+        settings = get_settings()
         # Determine base URL (from settings or environment variable)
         base_url = settings.openai_base_url or os.getenv("OPENAI_BASE_URL")
 
@@ -68,6 +69,7 @@ def get_openai_model() -> OpenAIModel:
 def get_anthropic_model() -> AnthropicModel:
     """Configure Anthropic Claude model with proper error handling"""
     try:
+        settings = get_settings()
         # Determine base URL (from settings or environment variable)
         base_url = settings.anthropic_base_url or os.getenv("ANTHROPIC_BASE_URL")
 
@@ -110,6 +112,7 @@ def get_anthropic_model() -> AnthropicModel:
 def get_google_model() -> GoogleModel:
     """Configure Google Gemini model with proper error handling"""
     try:
+        settings = get_settings()
         # Determine base URL (from settings or environment variable)
         base_url = settings.google_base_url or os.getenv("GOOGLE_BASE_URL")
 
@@ -157,6 +160,7 @@ def get_llm_model(model_name: Optional[str] = None) -> Union[Model, FallbackMode
     Returns:
         Configured PydanticAI model
     """
+    settings = get_settings()
     model_name = model_name or settings.ai_model
 
     # Single model configuration

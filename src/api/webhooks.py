@@ -12,7 +12,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from src.agents.code_reviewer import CodeReviewAgent
-from src.config.settings import settings
+from src.config.settings import get_settings
 from src.models.gitlab_models import GitLabWebhookPayload, MergeRequestEvent
 from src.services.gitlab_service import GitLabService
 from src.services.review_service import ReviewService
@@ -21,11 +21,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Rate limiter for webhooks
-limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
+limiter = Limiter(
+    key_func=get_remote_address, enabled=get_settings().rate_limit_enabled
+)
 
 
 def verify_gitlab_token(request: Request):
     """Verify GitLab webhook secret token with timestamp validation for replay protection"""
+    settings = get_settings()
     gitlab_token = request.headers.get("X-Gitlab-Token", "")
     timestamp = request.headers.get("X-Gitlab-Timestamp")
 
@@ -90,7 +93,7 @@ def verify_gitlab_token(request: Request):
 
 
 @router.post("/gitlab")
-@limiter.limit(settings.webhook_rate_limit)
+@limiter.limit(get_settings().webhook_rate_limit)
 async def handle_gitlab_webhook(request: Request, background_tasks: BackgroundTasks):
     """
     Handle GitLab webhook events for merge requests
@@ -102,6 +105,7 @@ async def handle_gitlab_webhook(request: Request, background_tasks: BackgroundTa
     # Since verify_gitlab_token now raises HTTPException directly, we don't need try/catch
     verify_gitlab_token(request)
 
+    settings = get_settings()
     # Parse webhook payload
     try:
         payload = await request.json()
