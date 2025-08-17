@@ -21,7 +21,6 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 - **Bearer Token Authentication**: Industry-standard Bearer token auth for all protected endpoints
 - **Rate Limiting**: Configurable per-IP rate limiting to prevent DoS attacks
 - **Request Validation**: Size limits and input sanitization to prevent memory exhaustion
-- **Security Headers**: Full CSRF, XSS, and clickjacking protection
 - **CORS Security**: Environment-specific origins with secure defaults
 - **Webhook Authentication**: Secure webhook verification with shared secrets
 - **Input Validation**: Comprehensive request validation and error handling
@@ -39,21 +38,28 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 - **Connection Pooling**: Efficient HTTP client reuse and connection management
 - **Resource Limits**: Configurable memory and request size constraints
 - **Docker Ready**: Multi-stage builds with security best practices
-- **Monitoring**: Prometheus metrics and observability hooks
 
 ## 🏗️ Architecture
 
 ```
-├── FastAPI Application (src/main.py)
-├── PydanticAI Review Agent (src/agents/)
-│   ├── Multi-LLM Provider Support
-│   └── Security Analysis Tools
-├── GitLab Integration (src/services/)
-│   ├── Webhook Handler
-│   ├── API Client
-│   └── Comment Formatter
-├── Review Orchestration (src/services/review_service.py)
-└── Configuration & Models (src/config/, src/models/)
+src/
+├── main.py                    # FastAPI application entry point with lifespan management
+├── exceptions.py              # Custom exception hierarchy for structured error handling
+├── agents/
+│   ├── code_reviewer.py       # PydanticAI review agent with security analysis tools
+│   └── providers.py           # Multi-LLM provider support (OpenAI, Anthropic, Google)
+├── api/
+│   ├── webhooks.py            # GitLab webhook handlers with rate limiting
+│   ├── health.py              # Health check endpoints (liveness, readiness, status)
+│   └── middleware.py          # Security middleware (Bearer auth, CORS, logging)
+├── services/
+│   ├── gitlab_service.py      # GitLab API client with retry logic and connection pooling
+│   └── review_service.py      # Review orchestration between GitLab and AI providers
+├── models/
+│   ├── gitlab_models.py       # Pydantic models for GitLab webhook payloads
+│   └── review_models.py       # Structured models for AI review results
+└── config/
+    └── settings.py            # Environment-based configuration with validation
 ```
 
 ## 🚀 Quick Start
@@ -61,14 +67,14 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 ### Prerequisites
 
 - Python 3.11+
-- GitLab instance (self-hosted or GitLab.com)
+- GitLab instance (self-hosted or gitlab.com)
 - At least one AI provider API key (OpenAI, Anthropic, or Google)
 
 ### Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-org/gitlab-ai-reviewer.git
+   git clone https://github.com/adraynrion/gitlab-ai-reviewer.git
    cd gitlab-ai-reviewer
    ```
 
@@ -131,8 +137,8 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 
 - `openai:gpt-4o` - OpenAI GPT-4 Omni
 - `anthropic:claude-3-5-sonnet` - Anthropic Claude 3.5 Sonnet
-- `gemini:gemini-1.5-pro` - Google Gemini 1.5 Pro
-- `fallback` - Use multiple providers with fallback
+- `gemini:gemini-2.5-pro` - Google Gemini 2.5 Pro
+- `fallback` - Use multiple providers with fallback (OpenAI, Anthropic, Google)
 
 ### GitLab Setup
 
@@ -163,9 +169,9 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 
 The AI agent analyzes code across five key areas:
 
+- **✅ Correctness**: Logic errors, edge cases, algorithm issues
 - **🔒 Security**: Vulnerability detection, input validation, authentication issues
 - **⚡ Performance**: Bottlenecks, inefficient algorithms, resource usage
-- **✅ Correctness**: Logic errors, edge cases, algorithm issues
 - **🛠️ Maintainability**: Code clarity, structure, documentation quality
 - **📋 Best Practices**: Language conventions, design patterns, testing
 
@@ -206,49 +212,11 @@ Function lacks proper type hints.
 
 ```bash
 # Build image
-docker build -t gitlab-ai-reviewer:latest .
+docker compose build
 
 # Run container
-docker run -d \
-  --name gitlab-ai-reviewer \
-  -p 8000:8000 \
-  --env-file .env \
-  gitlab-ai-reviewer:latest
+docker compose up -d
 ```
-
-### Kubernetes
-
-```bash
-# Deploy to Kubernetes
-kubectl apply -f k8s/
-```
-
-### Production Checklist
-
-#### Security 🔒
-- [ ] Configure proper secrets management (HashiCorp Vault, AWS Secrets Manager)
-- [ ] Set up SSL/TLS certificates with automatic renewal
-- [ ] Configure CORS origins for your specific GitLab domain
-- [ ] Set appropriate rate limits for your traffic patterns
-- [ ] Enable webhook secret verification
-- [ ] Configure firewall rules and network security groups
-- [ ] Set up API key authentication for admin endpoints
-
-#### Reliability 🛠️
-- [ ] Configure log aggregation (ELK stack, Splunk, or similar)
-- [ ] Set up monitoring and alerts (Prometheus + Grafana)
-- [ ] Configure health check endpoints for load balancers
-- [ ] Test graceful shutdown behavior
-- [ ] Validate retry mechanisms and circuit breaker patterns
-- [ ] Set up distributed tracing (Jaeger, Zipkin)
-
-#### Operations 🚀
-- [ ] Test webhook connectivity and authentication
-- [ ] Validate AI provider quotas and rate limits
-- [ ] Configure horizontal pod autoscaling (if using Kubernetes)
-- [ ] Set up backup strategies for configuration
-- [ ] Document runbooks for common operational tasks
-- [ ] Configure alerting for critical errors and performance degradation
 
 ## 🧪 Testing
 
@@ -259,27 +227,19 @@ kubectl apply -f k8s/
 source .venv/bin/activate
 
 # Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src --cov-report=html --cov-report=term-missing
+make test
 
 # Run only unit tests
-pytest tests/unit/ -v
+make test-unit
 
 # Run integration tests
-pytest tests/integration/ -v
-
-# Run security-focused tests
-pytest tests/security/ -v
+make test-integration
 ```
 
 ### Test Categories
 
 - **Unit Tests**: Component-level testing with mocks
 - **Integration Tests**: End-to-end webhook and API testing
-- **Security Tests**: Rate limiting, input validation, and auth testing
-- **Performance Tests**: Load testing and response time validation
 
 ### Manual Testing
 
@@ -345,29 +305,6 @@ The application provides several endpoints for monitoring:
 
 ## 🔧 Development
 
-### Project Structure
-
-```
-src/
-├── main.py                   # FastAPI application with lifespan management
-├── exceptions.py             # Standardized exception hierarchy
-├── agents/
-│   ├── code_reviewer.py      # PydanticAI review agent with tools
-│   └── providers.py          # Multi-LLM configuration with error handling
-├── api/
-│   ├── webhooks.py          # GitLab webhook handlers with rate limiting
-│   ├── health.py            # Comprehensive health check endpoints
-│   └── middleware.py        # Security, authentication & logging
-├── services/
-│   ├── gitlab_service.py    # GitLab API client with retry logic
-│   └── review_service.py    # Review orchestration with error recovery
-├── models/
-│   ├── gitlab_models.py     # GitLab webhook models with validation
-│   └── review_models.py     # Review result models
-└── config/
-    └── settings.py          # Configuration management with validation
-```
-
 ### Contributing
 
 1. Fork the repository
@@ -379,20 +316,17 @@ src/
 ### Code Quality
 
 ```bash
-# Format code
-black src/ tests/
+# Format code and clean Imports
+make fix
 
-# Lint code
-flake8 src/ tests/
+# Lint and Quality check
+make quality
 
-# Remove unused imports and variables (dry run)
-autoflake --remove-all-unused-imports --remove-unused-variables --check --recursive src/ tests/
+# Run tests
+make test
 
-# Remove unused imports and variables (in place)
-autoflake --remove-all-unused-imports --remove-unused-variables --in-place --recursive src/ tests/
-
-# Type check
-mypy src/
+# Run all of the above
+make all
 ```
 
 ## 🔐 Security
@@ -428,7 +362,7 @@ export API_KEY="your-api-key"
 
 ```bash
 # Available endpoints
-GET /                    # Service status with features
+GET /                   # Service status with features
 GET /health/live        # Kubernetes liveness probe
 GET /health/ready       # Kubernetes readiness probe
 GET /health/status      # Detailed health information
@@ -491,13 +425,13 @@ python -m src.main
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the [LICENSE](LICENSE) file.
 
 ## 🤝 Support
 
-- 📖 [Documentation](https://github.com/your-org/gitlab-ai-reviewer#readme)
-- 🐛 [Issue Tracker](https://github.com/your-org/gitlab-ai-reviewer/issues)
-- 💬 [Discussions](https://github.com/your-org/gitlab-ai-reviewer/discussions)
+- 📖 [Documentation](https://github.com/adraynrion/gitlab-ai-reviewer#readme)
+- 🐛 [Issue Tracker](https://github.com/adraynrion/gitlab-ai-reviewer/issues)
+- 💬 [Discussions](https://github.com/adraynrion/gitlab-ai-reviewer/discussions)
 - 🔒 [Security Reports](mailto:adraynrion@pm.me)
 
 ## 🙏 Acknowledgments
