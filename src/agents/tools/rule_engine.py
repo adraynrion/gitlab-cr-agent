@@ -10,58 +10,130 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from src.agents.tools.context_tools import Context7Client
+from src.agents.tools.python.context_tools import Context7Client
 
 logger = logging.getLogger(__name__)
 
 
 class RuleEngine:
     """
-    Central rule engine for fetching standards-based code review rules
+    Language-aware rule engine for fetching standards-based code review rules
 
     Integrates with Context7 to dynamically load current standards from:
     - OWASP Top 10 security guidelines
     - NIST Cybersecurity Framework
     - Python Enhancement Proposals (PEPs)
     - Framework-specific best practices (FastAPI, Django, Flask)
+    - Language-specific patterns and recommendations
     """
 
-    def __init__(self, settings: Optional[Dict[str, Any]] = None):
-        """Initialize the rule engine with configuration"""
+    def __init__(
+        self, settings: Optional[Dict[str, Any]] = None, language: str = "python"
+    ):
+        """
+        Initialize the rule engine with configuration and target language
+
+        Args:
+            settings: Optional configuration settings
+            language: Target programming language for rules (default: python)
+        """
         self.settings = settings or {}
+        self.language = language.lower()
         self.context7_client = Context7Client(settings)
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._cache_timestamps: Dict[str, float] = {}
         self.cache_ttl = self.settings.get("rule_cache_ttl", 3600)  # 1 hour default
 
-        # Standard library mapping for rule sources
-        self.rule_sources = {
-            "security": {
-                "owasp": "/owasp/top-10-2021",
-                "nist": "/nist/cybersecurity-framework",
-                "python_security": "/websites/python-3",
-            },
-            "performance": {
-                "python_performance": "/websites/python-3",
-                "best_practices": "/python/python-patterns",
-            },
-            "correctness": {
-                "python_peps": "/websites/python-3",
-                "async_patterns": "/websites/python-3",
-            },
-            "style": {"pep8": "/python/pep8", "black": "/psf/black"},
-            "framework": {
-                "fastapi": "/tiangolo/fastapi",
-                "django": "/django/django",
-                "flask": "/pallets/flask",
-                "pytest": "/pytest-dev/pytest",
-                "pydantic": "/pydantic/pydantic",
-            },
-        }
+        # Language-aware rule sources mapping
+        self.rule_sources = self._get_language_rule_sources(self.language)
+
+    def _get_language_rule_sources(self, language: str) -> Dict[str, Dict[str, str]]:
+        """Get rule sources based on target language"""
+        if language == "python":
+            return {
+                "security": {
+                    "owasp": "/owasp/top-10-2021",
+                    "nist": "/nist/cybersecurity-framework",
+                    "python_security": "/websites/python-3",
+                },
+                "performance": {
+                    "python_performance": "/websites/python-3",
+                    "best_practices": "/python/python-patterns",
+                },
+                "correctness": {
+                    "python_peps": "/websites/python-3",
+                    "async_patterns": "/websites/python-3",
+                },
+                "style": {"pep8": "/python/pep8", "black": "/psf/black"},
+                "framework": {
+                    "fastapi": "/tiangolo/fastapi",
+                    "django": "/django/django",
+                    "flask": "/pallets/flask",
+                    "pytest": "/pytest-dev/pytest",
+                    "pydantic": "/pydantic/pydantic",
+                },
+            }
+        elif language == "javascript":
+            return {
+                "security": {
+                    "owasp": "/owasp/top-10-2021",
+                    "nist": "/nist/cybersecurity-framework",
+                    "js_security": "/nodejs/node",
+                },
+                "performance": {
+                    "js_performance": "/nodejs/node",
+                    "best_practices": "/airbnb/javascript",
+                },
+                "correctness": {
+                    "eslint": "/eslint/eslint",
+                    "typescript": "/microsoft/typescript",
+                },
+                "style": {"prettier": "/prettier/prettier", "eslint": "/eslint/eslint"},
+                "framework": {
+                    "react": "/facebook/react",
+                    "nextjs": "/vercel/next.js",
+                    "express": "/expressjs/express",
+                    "jest": "/facebook/jest",
+                },
+            }
+        elif language == "go":
+            return {
+                "security": {
+                    "owasp": "/owasp/top-10-2021",
+                    "nist": "/nist/cybersecurity-framework",
+                    "go_security": "/golang/go",
+                },
+                "performance": {
+                    "go_performance": "/golang/go",
+                    "best_practices": "/golang/go",
+                },
+                "correctness": {
+                    "effective_go": "/golang/go",
+                    "go_patterns": "/golang/go",
+                },
+                "style": {"gofmt": "/golang/go", "golint": "/golang/go"},
+                "framework": {
+                    "gin": "/gin-gonic/gin",
+                    "gorilla": "/gorilla/mux",
+                    "testify": "/stretchr/testify",
+                },
+            }
+        else:
+            # Default to universal security rules only
+            return {
+                "security": {
+                    "owasp": "/owasp/top-10-2021",
+                    "nist": "/nist/cybersecurity-framework",
+                },
+                "performance": {},
+                "correctness": {},
+                "style": {},
+                "framework": {},
+            }
 
     async def get_security_rules(self, rule_type: str = "general") -> Dict[str, Any]:
         """
-        Get current security rules from OWASP and NIST standards
+        Get current security rules from OWASP and NIST standards for the target language
 
         Args:
             rule_type: Type of security rules ('injection', 'authentication', 'crypto', etc.)
@@ -69,7 +141,7 @@ class RuleEngine:
         Returns:
             Dictionary containing security patterns, severity levels, and recommendations
         """
-        cache_key = f"security:{rule_type}"
+        cache_key = f"security:{self.language}:{rule_type}"
 
         # Check cache first
         if self._is_cached(cache_key):
@@ -110,7 +182,7 @@ class RuleEngine:
         self, framework: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Get performance optimization rules from Python documentation and framework guides
+        Get performance optimization rules from language documentation and framework guides
 
         Args:
             framework: Optional framework name for framework-specific rules
@@ -118,7 +190,7 @@ class RuleEngine:
         Returns:
             Dictionary containing performance patterns and optimization guidelines
         """
-        cache_key = f"performance:{framework or 'general'}"
+        cache_key = f"performance:{self.language}:{framework or 'general'}"
 
         if self._is_cached(cache_key):
             return self._get_from_cache(cache_key)
@@ -158,7 +230,7 @@ class RuleEngine:
         Returns:
             Dictionary containing async patterns, anti-patterns, and best practices
         """
-        cache_key = "async:patterns"
+        cache_key = f"async:{self.language}:patterns"
 
         if self._is_cached(cache_key):
             return self._get_from_cache(cache_key)
@@ -186,7 +258,7 @@ class RuleEngine:
         Returns:
             Dictionary containing exception handling patterns and guidelines
         """
-        cache_key = "error_handling:patterns"
+        cache_key = f"error_handling:{self.language}:patterns"
 
         if self._is_cached(cache_key):
             return self._get_from_cache(cache_key)
@@ -217,7 +289,7 @@ class RuleEngine:
         Returns:
             Dictionary containing framework-specific rules and patterns
         """
-        cache_key = f"framework:{framework}"
+        cache_key = f"framework:{self.language}:{framework}"
 
         if self._is_cached(cache_key):
             return self._get_from_cache(cache_key)

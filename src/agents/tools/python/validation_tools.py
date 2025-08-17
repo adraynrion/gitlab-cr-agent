@@ -19,13 +19,13 @@ from src.agents.tools.rule_engine import RuleEngine
 logger = logging.getLogger(__name__)
 
 
-@register_tool(enabled=True, name="PerformancePatternTool")
-class PerformancePatternTool(BaseTool):
-    """Detect performance anti-patterns using standards-based rules"""
+@register_tool(enabled=True, name="PythonPerformancePatternTool")
+class PythonPerformancePatternTool(BaseTool):
+    """Detect Python performance anti-patterns using standards-based rules"""
 
-    def __init__(self, name: str = "PerformancePatternTool"):
+    def __init__(self, name: str = "PythonPerformancePatternTool"):
         super().__init__(name)
-        self.rule_engine = RuleEngine()
+        self.rule_engine = RuleEngine(language="python")
 
     @property
     def category(self) -> ToolCategory:
@@ -297,9 +297,9 @@ class PerformancePatternTool(BaseTool):
         return findings
 
 
-@register_tool(enabled=True, name="AsyncPatternValidationTool")
-class AsyncPatternValidationTool(BaseTool):
-    """Validate async/await patterns and concurrency usage"""
+@register_tool(enabled=True, name="PythonAsyncPatternValidationTool")
+class PythonAsyncPatternValidationTool(BaseTool):
+    """Validate Python async/await patterns and concurrency usage"""
 
     @property
     def category(self) -> ToolCategory:
@@ -425,13 +425,13 @@ class AsyncPatternValidationTool(BaseTool):
         return findings
 
 
-@register_tool(enabled=True, name="ErrorHandlingTool")
-class ErrorHandlingTool(BaseTool):
-    """Validate error handling patterns using standards-based rules"""
+@register_tool(enabled=True, name="PythonErrorHandlingTool")
+class PythonErrorHandlingTool(BaseTool):
+    """Validate Python error handling patterns using standards-based rules"""
 
-    def __init__(self, name: str = "ErrorHandlingTool"):
+    def __init__(self, name: str = "PythonErrorHandlingTool"):
         super().__init__(name)
-        self.rule_engine = RuleEngine()
+        self.rule_engine = RuleEngine(language="python")
 
     @property
     def category(self) -> ToolCategory:
@@ -612,9 +612,9 @@ class ErrorHandlingTool(BaseTool):
         return findings
 
 
-@register_tool(enabled=True, name="TypeHintValidationTool")
-class TypeHintValidationTool(BaseTool):
-    """Validate type hints and type safety"""
+@register_tool(enabled=True, name="PythonTypeHintValidationTool")
+class PythonTypeHintValidationTool(BaseTool):
+    """Validate Python type hints and type safety"""
 
     @property
     def category(self) -> ToolCategory:
@@ -783,9 +783,9 @@ class TypeHintValidationTool(BaseTool):
         return findings
 
 
-@register_tool(enabled=True, name="FrameworkSpecificTool")
-class FrameworkSpecificTool(BaseTool):
-    """Validate framework-specific patterns and best practices"""
+@register_tool(enabled=True, name="PythonFrameworkSpecificTool")
+class PythonFrameworkSpecificTool(BaseTool):
+    """Validate Python framework-specific patterns and best practices"""
 
     @property
     def category(self) -> ToolCategory:
