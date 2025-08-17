@@ -150,6 +150,34 @@ class Settings(BaseSettings):
         default="httpx.HTTPStatusError,httpx.RequestError"
     )
 
+    # Tool System Configuration
+    tools_enabled: bool = Field(default=True)  # Enable/disable tool system
+    tools_parallel_execution: bool = Field(default=True)  # Execute tools in parallel
+    tools_cache_enabled: bool = Field(default=True)  # Enable tool result caching
+    tools_cache_ttl: int = Field(default=3600)  # Cache TTL in seconds (1 hour)
+    tools_timeout: int = Field(default=30)  # Tool execution timeout in seconds
+
+    # Context7 Configuration
+    context7_enabled: bool = Field(default=True)  # Enable Context7 MCP integration
+    context7_max_tokens: int = Field(default=2000)  # Maximum tokens per request
+    context7_cache_ttl: int = Field(default=3600)  # Cache TTL for documentation
+
+    # Tool Categories Configuration
+    enabled_tool_categories: List[str] = Field(
+        default_factory=lambda: [
+            "documentation",
+            "security",
+            "performance",
+            "correctness",
+            "maintainability",
+        ]
+    )
+    disabled_tool_categories: List[str] = Field(default_factory=list)
+
+    # Specific Tool Configuration
+    enabled_tools: List[str] = Field(default_factory=list)  # Explicitly enabled tools
+    disabled_tools: List[str] = Field(default_factory=list)  # Explicitly disabled tools
+
     @field_validator("allowed_origins")
     @classmethod
     def validate_origins(cls, v: List[str]) -> List[str]:

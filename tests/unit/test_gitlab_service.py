@@ -37,9 +37,7 @@ def mock_gitlab_service(mock_settings):
 
         with patch("src.services.gitlab_service.settings", mock_settings), patch(
             "src.api.middleware.get_correlation_id", return_value="test-correlation"
-        ), patch(
-            "src.api.middleware.get_request_id", return_value="test-request"
-        ):
+        ), patch("src.api.middleware.get_request_id", return_value="test-request"):
             service = GitLabService()
             service.client = mock_client_instance
             return service
@@ -257,9 +255,7 @@ async def test_gitlab_service_initialization(mock_settings):
     """Test GitLab service initialization with correct configuration"""
     with patch("httpx.AsyncClient") as mock_client_class, patch(
         "src.api.middleware.get_correlation_id", return_value="test-correlation"
-    ), patch(
-        "src.api.middleware.get_request_id", return_value="test-request"
-    ):
+    ), patch("src.api.middleware.get_request_id", return_value="test-request"):
         with patch("src.services.gitlab_service.settings", mock_settings):
             service = GitLabService()
 

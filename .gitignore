@@ -12,3 +12,7 @@ htmlcov/
 # Claude
 .claude/
 CLAUDE.md
+
+# Crush
+.crush/
+CRUSH.md
