@@ -19,13 +19,13 @@ from src.agents.tools.rule_engine import RuleEngine
 logger = logging.getLogger(__name__)
 
 
-@register_tool(enabled=True, name="SecurityAnalysisTool")
-class SecurityAnalysisTool(BaseTool):
-    """Analyze code for common security vulnerabilities using standards-based rules"""
+@register_tool(enabled=True, name="PythonSecurityAnalysisTool")
+class PythonSecurityAnalysisTool(BaseTool):
+    """Analyze Python code for common security vulnerabilities using standards-based rules"""
 
-    def __init__(self, name: str = "SecurityAnalysisTool"):
+    def __init__(self, name: str = "PythonSecurityAnalysisTool"):
         super().__init__(name)
-        self.rule_engine = RuleEngine()
+        self.rule_engine = RuleEngine(language="python")
 
     @property
     def category(self) -> ToolCategory:
@@ -239,9 +239,9 @@ class SecurityAnalysisTool(BaseTool):
         return findings
 
 
-@register_tool(enabled=True, name="ComplexityAnalysisTool")
-class ComplexityAnalysisTool(BaseTool):
-    """Calculate cyclomatic complexity and other code metrics"""
+@register_tool(enabled=True, name="PythonComplexityAnalysisTool")
+class PythonComplexityAnalysisTool(BaseTool):
+    """Calculate cyclomatic complexity and other Python code metrics"""
 
     @property
     def category(self) -> ToolCategory:
@@ -420,9 +420,9 @@ class ComplexityAnalysisTool(BaseTool):
         return complexity
 
 
-@register_tool(enabled=True, name="CodeQualityTool")
-class CodeQualityTool(BaseTool):
-    """Analyze general code quality issues"""
+@register_tool(enabled=True, name="PythonCodeQualityTool")
+class PythonCodeQualityTool(BaseTool):
+    """Analyze Python code quality issues"""
 
     @property
     def category(self) -> ToolCategory:

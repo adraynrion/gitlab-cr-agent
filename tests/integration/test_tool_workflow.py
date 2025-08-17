@@ -411,8 +411,8 @@ class TestToolWorkflowIntegration:
         test_settings = {
             "enabled_categories": ["security", "performance"],
             "disabled_categories": ["style"],
-            "enabled_tools": ["SecurityAnalysisTool"],
-            "disabled_tools": ["CodeQualityTool"],
+            "enabled_tools": ["PythonSecurityAnalysisTool"],
+            "disabled_tools": ["PythonCodeQualityTool"],
         }
 
         registry.configure_from_settings(test_settings)
@@ -421,13 +421,15 @@ class TestToolWorkflowIntegration:
         enabled_tools = registry.get_enabled_tools()
         enabled_tool_names = [tool.name for tool in enabled_tools]
 
-        # SecurityAnalysisTool should be explicitly enabled
-        if "SecurityAnalysisTool" in [tool.name for tool in registry.get_all_tools()]:
-            assert "SecurityAnalysisTool" in enabled_tool_names
+        # PythonSecurityAnalysisTool should be explicitly enabled
+        if "PythonSecurityAnalysisTool" in [
+            tool.name for tool in registry.get_all_tools()
+        ]:
+            assert "PythonSecurityAnalysisTool" in enabled_tool_names
 
-        # CodeQualityTool should be explicitly disabled
-        if "CodeQualityTool" in [tool.name for tool in registry.get_all_tools()]:
-            assert "CodeQualityTool" not in enabled_tool_names
+        # PythonCodeQualityTool should be explicitly disabled
+        if "PythonCodeQualityTool" in [tool.name for tool in registry.get_all_tools()]:
+            assert "PythonCodeQualityTool" not in enabled_tool_names
 
     def test_settings_integration(self):
         """Test integration with application settings"""
@@ -540,9 +542,11 @@ class TestRealWorldScenarios:
     @pytest.mark.asyncio
     async def test_security_vulnerability_detection(self, security_vulnerable_diff):
         """Test detection of real security vulnerabilities"""
-        from src.agents.tools.analysis_tools import SecurityAnalysisTool
         from src.agents.tools.base import ToolContext
-        from src.agents.tools.context_tools import SecurityPatternValidationTool
+        from src.agents.tools.python.analysis_tools import PythonSecurityAnalysisTool
+        from src.agents.tools.python.context_tools import (
+            PythonSecurityPatternValidationTool,
+        )
 
         context = ToolContext(
             diff_content=security_vulnerable_diff,
@@ -553,7 +557,10 @@ class TestRealWorldScenarios:
         )
 
         # Test security tools
-        security_tools = [SecurityPatternValidationTool(), SecurityAnalysisTool()]
+        security_tools = [
+            PythonSecurityPatternValidationTool(),
+            PythonSecurityAnalysisTool(),
+        ]
 
         all_issues = []
         for tool in security_tools:
@@ -584,7 +591,9 @@ class TestRealWorldScenarios:
     async def test_performance_issue_detection(self, performance_issues_diff):
         """Test detection of real performance issues"""
         from src.agents.tools.base import ToolContext
-        from src.agents.tools.validation_tools import PerformancePatternTool
+        from src.agents.tools.python.validation_tools import (
+            PythonPerformancePatternTool,
+        )
 
         context = ToolContext(
             diff_content=performance_issues_diff,
@@ -594,7 +603,7 @@ class TestRealWorldScenarios:
             repository_url="https://gitlab.com/test/repo",
         )
 
-        tool = PerformancePatternTool()
+        tool = PythonPerformancePatternTool()
         result = await tool.execute(context)
 
         assert result.success is True

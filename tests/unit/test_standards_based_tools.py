@@ -6,18 +6,21 @@ from unittest.mock import patch
 
 import pytest
 
-from src.agents.tools.analysis_tools import SecurityAnalysisTool
 from src.agents.tools.base import ToolContext
-from src.agents.tools.validation_tools import ErrorHandlingTool, PerformancePatternTool
+from src.agents.tools.python.analysis_tools import PythonSecurityAnalysisTool
+from src.agents.tools.python.validation_tools import (
+    PythonErrorHandlingTool,
+    PythonPerformancePatternTool,
+)
 
 
-class TestSecurityAnalysisToolStandardsBased:
-    """Test SecurityAnalysisTool with standards-based rules"""
+class TestPythonSecurityAnalysisToolStandardsBased:
+    """Test PythonSecurityAnalysisTool with standards-based rules"""
 
     @pytest.fixture
     def security_tool(self):
         """Create a security analysis tool"""
-        return SecurityAnalysisTool()
+        return PythonSecurityAnalysisTool()
 
     @pytest.fixture
     def test_context(self):
@@ -97,7 +100,7 @@ class TestSecurityAnalysisToolStandardsBased:
 
             # Verify successful execution
             assert result.success is True
-            assert result.tool_name == "SecurityAnalysisTool"
+            assert result.tool_name == "PythonSecurityAnalysisTool"
             assert result.category.value == "security"
 
             # Verify security issues were detected
@@ -204,13 +207,13 @@ class TestSecurityAnalysisToolStandardsBased:
         assert "eval" in findings[0]["evidence"]
 
 
-class TestPerformancePatternToolStandardsBased:
-    """Test PerformancePatternTool with standards-based rules"""
+class TestPythonPerformancePatternToolStandardsBased:
+    """Test PythonPerformancePatternTool with standards-based rules"""
 
     @pytest.fixture
     def performance_tool(self):
         """Create a performance analysis tool"""
-        return PerformancePatternTool()
+        return PythonPerformancePatternTool()
 
     @pytest.fixture
     def test_context_with_performance_issues(self):
@@ -290,7 +293,7 @@ class TestPerformancePatternToolStandardsBased:
 
                 # Verify successful execution
                 assert result.success is True
-                assert result.tool_name == "PerformancePatternTool"
+                assert result.tool_name == "PythonPerformancePatternTool"
 
                 # Verify performance issues detected
                 assert (
@@ -341,13 +344,13 @@ class TestPerformancePatternToolStandardsBased:
         assert framework is None
 
 
-class TestErrorHandlingToolStandardsBased:
-    """Test ErrorHandlingTool with standards-based rules"""
+class TestPythonErrorHandlingToolStandardsBased:
+    """Test PythonErrorHandlingTool with standards-based rules"""
 
     @pytest.fixture
     def error_tool(self):
         """Create an error handling analysis tool"""
-        return ErrorHandlingTool()
+        return PythonErrorHandlingTool()
 
     @pytest.fixture
     def test_context_with_error_issues(self):
@@ -418,7 +421,7 @@ class TestErrorHandlingToolStandardsBased:
 
             # Verify successful execution
             assert result.success is True
-            assert result.tool_name == "ErrorHandlingTool"
+            assert result.tool_name == "PythonErrorHandlingTool"
 
             # Verify error handling issues detected
             assert len(result.issues) >= 1  # Should detect bare except
@@ -533,9 +536,9 @@ class TestStandardsBasedToolsIntegration:
         )
 
         # Initialize tools
-        security_tool = SecurityAnalysisTool()
-        performance_tool = PerformancePatternTool()
-        error_tool = ErrorHandlingTool()
+        security_tool = PythonSecurityAnalysisTool()
+        performance_tool = PythonPerformancePatternTool()
+        error_tool = PythonErrorHandlingTool()
 
         # Mock rule engines for all tools
         with patch.object(
