@@ -14,13 +14,18 @@ from src.agents.tools.base import (
     ToolResult,
 )
 from src.agents.tools.registry import register_tool
+from src.agents.tools.rule_engine import RuleEngine
 
 logger = logging.getLogger(__name__)
 
 
 @register_tool(enabled=True, name="SecurityAnalysisTool")
 class SecurityAnalysisTool(BaseTool):
-    """Analyze code for common security vulnerabilities"""
+    """Analyze code for common security vulnerabilities using standards-based rules"""
+
+    def __init__(self, name: str = "SecurityAnalysisTool"):
+        super().__init__(name)
+        self.rule_engine = RuleEngine()
 
     @property
     def category(self) -> ToolCategory:
@@ -30,15 +35,25 @@ class SecurityAnalysisTool(BaseTool):
     def priority(self) -> ToolPriority:
         return ToolPriority.CRITICAL
 
+    @property
+    def requires_network(self) -> bool:
+        return True  # Needs network access for Context7 rule fetching
+
     async def execute(self, context: ToolContext) -> ToolResult:
-        """Analyze code for security vulnerabilities"""
+        """Analyze code for security vulnerabilities using current standards"""
         try:
             issues = []
             suggestions = []
             metrics = {}
+            references = []
+
+            # Get current security rules from OWASP and NIST
+            security_rules = await self.rule_engine.get_security_rules()
 
             # Analyze the diff content for security issues
-            security_findings = self._analyze_security_patterns(context.diff_content)
+            security_findings = await self._analyze_security_patterns(
+                context.diff_content, security_rules
+            )
 
             # Convert findings to structured issues
             for finding in security_findings:
@@ -53,22 +68,37 @@ class SecurityAnalysisTool(BaseTool):
                     }
                 )
 
-                if finding.get("suggestion"):
-                    suggestions.append(finding["suggestion"])
+                if finding.get("recommendation"):
+                    suggestions.append(finding["recommendation"])
+
+                # Collect references from standards
+                if finding.get("references"):
+                    references.extend(finding["references"])
 
             # Calculate security metrics
-            metrics["total_security_issues"] = len(issues)
-            metrics["critical_issues"] = len(
-                [i for i in issues if i["severity"] == "critical"]
+            metrics.update(
+                {
+                    "total_security_issues": len(issues),
+                    "critical_issues": len(
+                        [i for i in issues if i["severity"] == "critical"]
+                    ),
+                    "high_issues": len([i for i in issues if i["severity"] == "high"]),
+                    "medium_issues": len(
+                        [i for i in issues if i["severity"] == "medium"]
+                    ),
+                    "rules_source": security_rules.get("source", "Unknown"),
+                    "rules_last_updated": security_rules.get("last_updated", 0),
+                }
             )
-            metrics["high_issues"] = len([i for i in issues if i["severity"] == "high"])
 
-            # Determine confidence based on analysis depth
-            confidence = 0.9 if issues else 0.8
+            # Higher confidence when using current standards
+            confidence = 0.95 if issues else 0.9
 
             positive_findings = []
             if not issues:
-                positive_findings.append("No obvious security vulnerabilities detected")
+                positive_findings.append(
+                    f"No security vulnerabilities detected using {security_rules.get('source', 'current standards')}"
+                )
 
             return ToolResult(
                 tool_name=self.name,
@@ -78,6 +108,7 @@ class SecurityAnalysisTool(BaseTool):
                 suggestions=suggestions,
                 positive_findings=positive_findings,
                 metrics=metrics,
+                references=list(set(references)),  # Remove duplicates
                 confidence_score=confidence,
                 error_message=None,
                 execution_time_ms=0,
@@ -93,54 +124,114 @@ class SecurityAnalysisTool(BaseTool):
                 execution_time_ms=0,
             )
 
-    def _analyze_security_patterns(self, diff_content: str) -> List[Dict[str, Any]]:
-        """Analyze code for security patterns"""
+    async def _analyze_security_patterns(
+        self, diff_content: str, security_rules: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Analyze code for security patterns using standards-based rules"""
         findings = []
 
-        # Security patterns to check
-        patterns = {
-            "eval_exec": {
-                "regex": r"\+.*(?:eval|exec)\s*\(",
-                "severity": "critical",
-                "description": "Dangerous use of eval/exec - potential code injection",
-                "suggestion": "Avoid eval/exec; use safer alternatives like ast.literal_eval",
-            },
-            "hardcoded_password": {
-                "regex": r'\+.*password.*=.*["\'][^"\']+["\']',
-                "severity": "critical",
-                "description": "Potential hardcoded password detected",
-                "suggestion": "Use environment variables or secure secret management",
-            },
-            "sql_injection": {
-                "regex": r"\+.*(?:execute|query)\s*\([^)]*%[^)]*\)",
-                "severity": "critical",
-                "description": "Potential SQL injection vulnerability",
-                "suggestion": "Use parameterized queries or prepared statements",
-            },
-            "weak_crypto": {
-                "regex": r"\+.*(?:md5|sha1)\s*\(",
-                "severity": "high",
-                "description": "Weak cryptographic algorithm detected",
-                "suggestion": "Use stronger hashing algorithms like SHA-256 or bcrypt",
-            },
-            "file_traversal": {
-                "regex": r"\+.*open\s*\([^)]*\.\./[^)]*\)",
-                "severity": "high",
-                "description": "Potential file traversal vulnerability",
-                "suggestion": "Validate and sanitize file paths",
-            },
+        # Get patterns from current security standards
+        patterns = security_rules.get("patterns", {})
+
+        # Analyze each pattern type from standards
+        for pattern_name, pattern_info in patterns.items():
+            pattern_findings = self._detect_pattern_in_code(
+                diff_content, pattern_name, pattern_info
+            )
+            findings.extend(pattern_findings)
+
+        # Add recommendations from standards
+        recommendations = security_rules.get("recommendations", [])
+        for finding in findings:
+            if not finding.get("recommendation") and recommendations:
+                finding["recommendation"] = recommendations[
+                    0
+                ]  # Use first relevant recommendation
+
+        return findings
+
+    def _detect_pattern_in_code(
+        self, diff_content: str, pattern_name: str, pattern_info: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Detect specific security pattern in code based on pattern type"""
+        findings = []
+
+        # Define detection regex patterns based on pattern type
+        detection_patterns = {
+            "sql_injection": [
+                r"\+.*(?:execute|query)\s*\([^)]*%[^)]*\)",
+                r"\+.*(?:execute|query)\s*\([^)]*\+[^)]*\)",
+                r"\+.*(?:execute|query)\s*\([^)]*f[\"'][^\"']*\{[^}]*\}",
+            ],
+            "code_injection": [
+                r"\+.*(?:eval|exec)\s*\(",
+            ],
+            "hardcoded_secrets": [
+                # Only match actual hardcoded strings, not environment variables
+                r'\+.*(?:password|secret|key|token)\s*=\s*["\'][a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};\'\\:"|,.<>\?~`]{8,}["\']',
+                r'\+.*(?:PASSWORD|SECRET|KEY|TOKEN)\s*=\s*["\'][a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};\'\\:"|,.<>\?~`]{8,}["\']',
+            ],
+            "weak_crypto": [
+                r"\+.*(?:md5|sha1)\s*\(",
+                r"\+.*hashlib\.(?:md5|sha1)\s*\(",
+            ],
+            "file_traversal": [
+                r"\+.*open\s*\([^)]*\.\./[^)]*\)",
+                r"\+.*Path\s*\([^)]*\.\./[^)]*\)",
+            ],
+            "cors_wildcard": [
+                r'\+.*allow_origins.*=.*\[.*["\']\*["\'].*\]',
+                r'\+.*CORS.*origins.*=.*["\']\*["\']',
+            ],
+            "insecure_random": [
+                r"\+.*random\.random\s*\(",
+                r"\+.*random\.choice\s*\(",
+            ],
+            "path_injection": [
+                r"\+.*os\.path\.join\s*\([^)]*\.\./",
+                r"\+.*pathlib\.Path\s*\([^)]*\.\./",
+            ],
         }
 
-        for pattern_name, pattern_info in patterns.items():
-            matches = re.finditer(pattern_info["regex"], diff_content, re.IGNORECASE)
+        # Get regex patterns for this pattern type
+        regexes = detection_patterns.get(pattern_name, [])
+
+        for regex in regexes:
+            matches = re.finditer(regex, diff_content, re.IGNORECASE | re.MULTILINE)
             for match in matches:
+                matched_text = match.group(0).strip()
+
+                # Skip false positives for hardcoded secrets
+                if pattern_name == "hardcoded_secrets":
+                    # Skip if using environment variables or secure functions
+                    if any(
+                        secure_pattern in matched_text.lower()
+                        for secure_pattern in [
+                            "os.getenv",
+                            "os.environ",
+                            "getenv(",
+                            "environ[",
+                            "config.",
+                            "settings.",
+                            ".env",
+                            "vault.",
+                            "secret_manager",
+                        ]
+                    ):
+                        continue
+
                 findings.append(
                     {
                         "pattern": pattern_name,
-                        "severity": pattern_info["severity"],
-                        "description": pattern_info["description"],
-                        "suggestion": pattern_info["suggestion"],
-                        "evidence": match.group(0).strip(),
+                        "severity": pattern_info.get("severity", "medium"),
+                        "description": pattern_info.get(
+                            "description", f"Security issue: {pattern_name}"
+                        ),
+                        "recommendation": pattern_info.get(
+                            "recommendation", "Follow security best practices"
+                        ),
+                        "references": pattern_info.get("references", []),
+                        "evidence": matched_text,
                         "line_number": diff_content[: match.start()].count("\n") + 1,
                     }
                 )

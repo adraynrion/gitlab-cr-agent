@@ -4,7 +4,7 @@ Enhanced validation tools for comprehensive code review
 
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.agents.tools.base import (
     BaseTool,
@@ -14,13 +14,18 @@ from src.agents.tools.base import (
     ToolResult,
 )
 from src.agents.tools.registry import register_tool
+from src.agents.tools.rule_engine import RuleEngine
 
 logger = logging.getLogger(__name__)
 
 
 @register_tool(enabled=True, name="PerformancePatternTool")
 class PerformancePatternTool(BaseTool):
-    """Detect performance anti-patterns and optimization opportunities"""
+    """Detect performance anti-patterns using standards-based rules"""
+
+    def __init__(self, name: str = "PerformancePatternTool"):
+        super().__init__(name)
+        self.rule_engine = RuleEngine()
 
     @property
     def category(self) -> ToolCategory:
@@ -30,15 +35,28 @@ class PerformancePatternTool(BaseTool):
     def priority(self) -> ToolPriority:
         return ToolPriority.HIGH
 
+    @property
+    def requires_network(self) -> bool:
+        return True  # Needs network access for Context7 rule fetching
+
     async def execute(self, context: ToolContext) -> ToolResult:
-        """Analyze code for performance issues"""
+        """Analyze code for performance issues using current standards"""
         try:
             issues = []
             suggestions = []
             metrics = {}
+            references: List[str] = []
+
+            # Detect framework being used
+            framework = self._detect_framework(context.diff_content)
+
+            # Get current performance rules from Python docs and framework guides
+            performance_rules = await self.rule_engine.get_performance_rules(framework)
 
             # Performance pattern checks
-            perf_analysis = self._analyze_performance_patterns(context.diff_content)
+            perf_analysis = await self._analyze_performance_patterns(
+                context.diff_content, performance_rules
+            )
 
             for finding in perf_analysis:
                 issues.append(
@@ -52,8 +70,11 @@ class PerformancePatternTool(BaseTool):
                     }
                 )
 
-                if finding.get("suggestion"):
-                    suggestions.append(finding["suggestion"])
+                if finding.get("recommendation"):
+                    suggestions.append(finding["recommendation"])
+
+                if finding.get("alternative"):
+                    suggestions.append(f"Alternative: {finding['alternative']}")
 
             # Calculate performance metrics
             metrics.update(
@@ -68,12 +89,20 @@ class PerformancePatternTool(BaseTool):
                     "memory_issues": len(
                         [i for i in issues if "memory" in i["description"]]
                     ),
+                    "string_concat_issues": len(
+                        [i for i in issues if "concatenation" in i["description"]]
+                    ),
+                    "framework_detected": framework or "none",
+                    "rules_source": performance_rules.get("source", "Unknown"),
+                    "rules_last_updated": performance_rules.get("last_updated", 0),
                 }
             )
 
             positive_findings = []
             if not issues:
-                positive_findings.append("No obvious performance issues detected")
+                positive_findings.append(
+                    f"No performance issues detected using {performance_rules.get('source', 'current standards')}"
+                )
 
             return ToolResult(
                 tool_name=self.name,
@@ -83,7 +112,8 @@ class PerformancePatternTool(BaseTool):
                 suggestions=suggestions,
                 positive_findings=positive_findings,
                 metrics=metrics,
-                confidence_score=0.8,
+                references=references,
+                confidence_score=0.85,
                 error_message=None,
                 execution_time_ms=0,
             )
@@ -98,78 +128,139 @@ class PerformancePatternTool(BaseTool):
                 execution_time_ms=0,
             )
 
-    def _analyze_performance_patterns(self, diff_content: str) -> List[Dict[str, Any]]:
-        """Analyze code for performance anti-patterns"""
-        findings = []
-
-        # Performance anti-patterns
-        patterns = {
-            "string_concatenation_loop": {
-                "regex": r"\+\s*for\s+.*:\s*\n\s*\+\s*.*\+=.*\+",
-                "severity": "medium",
-                "description": "String concatenation in loop - consider using join()",
-                "suggestion": "Use ''.join() or a list comprehension for better performance",
-            },
-            "repeated_function_calls": {
-                "regex": r"\+\s*for\s+.*:\s*.*len\(",
-                "severity": "low",
-                "description": "Function call in loop condition - cache the result",
-                "suggestion": "Cache len() result outside the loop",
-            },
-            "inefficient_membership_test": {
-                "regex": r"\+\s*.*in\s+\[.*\]",
-                "severity": "medium",
-                "description": "Membership test on list - consider using set",
-                "suggestion": "Use set for O(1) membership testing instead of list O(n)",
-            },
-            "unnecessary_list_comprehension": {
-                "regex": r"\+\s*list\(\[.*for.*\]\)",
-                "severity": "low",
-                "description": "Unnecessary list() around list comprehension",
-                "suggestion": "Remove redundant list() call around list comprehension",
-            },
-            "inefficient_dict_access": {
-                "regex": r"\+\s*if\s+.*in\s+.*\.keys\(\)",
-                "severity": "low",
-                "description": "Inefficient dictionary key check using .keys()",
-                "suggestion": "Use 'if key in dict' instead of 'if key in dict.keys()'",
-            },
+    def _detect_framework(self, diff_content: str) -> Optional[str]:
+        """Detect which framework is being used in the code"""
+        framework_patterns = {
+            "fastapi": r"from\s+fastapi|import\s+fastapi|@app\.(get|post|put|delete)",
+            "django": r"from\s+django|import\s+django|class.*\(Model\)",
+            "flask": r"from\s+flask|import\s+flask|@app\.route",
+            "sqlalchemy": r"from\s+sqlalchemy|import\s+sqlalchemy",
         }
 
+        for framework, pattern in framework_patterns.items():
+            if re.search(pattern, diff_content, re.IGNORECASE):
+                return framework
+
+        return None
+
+    async def _analyze_performance_patterns(
+        self, diff_content: str, performance_rules: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Analyze code for performance anti-patterns using standards-based rules"""
+        findings = []
+
+        # Get patterns from current performance standards
+        patterns = performance_rules.get("patterns", {})
+
+        # Analyze each pattern type from standards
         for pattern_name, pattern_info in patterns.items():
-            matches = re.finditer(pattern_info["regex"], diff_content, re.MULTILINE)
+            pattern_findings = self._detect_performance_pattern_in_code(
+                diff_content, pattern_name, pattern_info
+            )
+            findings.extend(pattern_findings)
+
+        # Add database-specific performance checks
+        db_findings = self._check_database_patterns(diff_content, performance_rules)
+        findings.extend(db_findings)
+
+        return findings
+
+    def _detect_performance_pattern_in_code(
+        self, diff_content: str, pattern_name: str, pattern_info: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Detect specific performance pattern in code based on pattern type"""
+        findings = []
+
+        # Define detection regex patterns based on pattern type
+        detection_patterns = {
+            "string_concatenation": [
+                r"\+\s*for\s+.*:\s*\n\s*\+\s*.*\+=.*\+",
+                r"\+\s*.*\+=\s*.*\+.*\+.*",  # Multiple string concatenations
+            ],
+            "membership_test": [
+                r"\+\s*.*in\s+\[.*\]",
+                r"\+\s*.*not\s+in\s+\[.*\]",
+            ],
+            "repeated_function_calls": [
+                r"\+\s*for\s+.*:\s*.*len\(",
+                r"\+\s*while\s+.*len\(",
+            ],
+            "memory_usage": [
+                r"\+\s*list\(\[.*for.*\]\)",  # Unnecessary list() around comprehension
+                r"\+\s*.*\.copy\(\)\s*\+",  # Unnecessary copying
+            ],
+            "sync_in_async": [
+                r"\+\s*async\s+def.*:\s*.*\n\s*\+\s*.*time\.sleep\(",
+                r"\+\s*async\s+def.*:\s*.*\n\s*\+\s*.*requests\.",
+            ],
+            "n_plus_one": [
+                r"\+\s*for\s+.*:\s*\n\s*\+\s*.*\.get\(",
+                r"\+\s*for\s+.*:\s*\n\s*\+\s*.*\.filter\(",
+            ],
+            "inefficient_dict_access": [
+                r"\+\s*if\s+.*in\s+.*\.keys\(\)",
+                r"\+\s*for\s+.*in\s+.*\.keys\(\)",
+            ],
+        }
+
+        # Get regex patterns for this pattern type
+        regexes = detection_patterns.get(pattern_name, [])
+
+        for regex in regexes:
+            matches = re.finditer(regex, diff_content, re.IGNORECASE | re.MULTILINE)
             for match in matches:
                 findings.append(
                     {
                         "pattern": pattern_name,
-                        "severity": pattern_info["severity"],
-                        "description": pattern_info["description"],
-                        "suggestion": pattern_info["suggestion"],
+                        "severity": pattern_info.get("severity", "medium"),
+                        "description": pattern_info.get(
+                            "description", f"Performance issue: {pattern_name}"
+                        ),
+                        "recommendation": pattern_info.get(
+                            "recommendation", "Follow performance best practices"
+                        ),
+                        "alternative": pattern_info.get("alternative", ""),
                         "evidence": match.group(0).strip(),
                         "line_number": diff_content[: match.start()].count("\n") + 1,
                     }
                 )
 
-        # Check for database query patterns
-        db_patterns = self._check_database_patterns(diff_content)
-        findings.extend(db_patterns)
-
         return findings
 
-    def _check_database_patterns(self, diff_content: str) -> List[Dict[str, Any]]:
-        """Check for database-related performance issues"""
+    def _check_database_patterns(
+        self, diff_content: str, performance_rules: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Check for database-related performance issues using standards-based rules"""
         findings = []
+
+        # Get database patterns from performance rules
+        patterns = performance_rules.get("patterns", {})
 
         # N+1 query pattern detection
         if re.search(
             r"\+\s*for\s+.*:\s*\n\s*\+\s*.*\.get\(", diff_content, re.MULTILINE
         ):
+            n_plus_one_info = patterns.get(
+                "n_plus_one",
+                {
+                    "severity": "high",
+                    "description": "Potential N+1 query pattern detected",
+                    "recommendation": "Use select_related() or prefetch_related() to optimize queries",
+                    "alternative": "Bulk fetch related objects to avoid repeated queries",
+                },
+            )
+
             findings.append(
                 {
                     "pattern": "n_plus_one_query",
-                    "severity": "high",
-                    "description": "Potential N+1 query pattern detected",
-                    "suggestion": "Use select_related() or prefetch_related() to optimize queries",
+                    "severity": n_plus_one_info.get("severity", "high"),
+                    "description": n_plus_one_info.get(
+                        "description", "N+1 query pattern detected"
+                    ),
+                    "recommendation": n_plus_one_info.get(
+                        "recommendation", "Optimize database queries"
+                    ),
+                    "alternative": n_plus_one_info.get("alternative", ""),
                     "evidence": "Loop with individual database queries",
                     "line_number": 0,
                 }
@@ -177,12 +268,27 @@ class PerformancePatternTool(BaseTool):
 
         # Missing database indexes
         if re.search(r"\+\s*.*\.filter\(.*=.*\)", diff_content):
+            index_info = patterns.get(
+                "missing_index",
+                {
+                    "severity": "medium",
+                    "description": "Database filter without obvious index",
+                    "recommendation": "Ensure database indexes exist for filtered fields",
+                    "alternative": "Add database indexes for frequently queried fields",
+                },
+            )
+
             findings.append(
                 {
                     "pattern": "potential_missing_index",
-                    "severity": "medium",
-                    "description": "Database filter without obvious index",
-                    "suggestion": "Ensure database indexes exist for filtered fields",
+                    "severity": index_info.get("severity", "medium"),
+                    "description": index_info.get(
+                        "description", "Missing database index"
+                    ),
+                    "recommendation": index_info.get(
+                        "recommendation", "Add appropriate database indexes"
+                    ),
+                    "alternative": index_info.get("alternative", ""),
                     "evidence": "Database query with filter",
                     "line_number": 0,
                 }
@@ -321,7 +427,11 @@ class AsyncPatternValidationTool(BaseTool):
 
 @register_tool(enabled=True, name="ErrorHandlingTool")
 class ErrorHandlingTool(BaseTool):
-    """Validate error handling patterns and exception safety"""
+    """Validate error handling patterns using standards-based rules"""
+
+    def __init__(self, name: str = "ErrorHandlingTool"):
+        super().__init__(name)
+        self.rule_engine = RuleEngine()
 
     @property
     def category(self) -> ToolCategory:
@@ -331,15 +441,25 @@ class ErrorHandlingTool(BaseTool):
     def priority(self) -> ToolPriority:
         return ToolPriority.HIGH
 
+    @property
+    def requires_network(self) -> bool:
+        return True  # Needs network access for Context7 rule fetching
+
     async def execute(self, context: ToolContext) -> ToolResult:
-        """Analyze error handling patterns"""
+        """Analyze error handling patterns using current standards"""
         try:
             issues = []
             suggestions = []
             metrics = {}
+            references: List[str] = []
+
+            # Get current error handling rules from Python documentation
+            error_rules = await self.rule_engine.get_error_handling_rules()
 
             # Analyze error handling
-            error_analysis = self._analyze_error_handling(context.diff_content)
+            error_analysis = await self._analyze_error_handling(
+                context.diff_content, error_rules
+            )
 
             for finding in error_analysis:
                 issues.append(
@@ -353,8 +473,11 @@ class ErrorHandlingTool(BaseTool):
                     }
                 )
 
-                if finding.get("suggestion"):
-                    suggestions.append(finding["suggestion"])
+                if finding.get("recommendation"):
+                    suggestions.append(finding["recommendation"])
+
+                if finding.get("alternative"):
+                    suggestions.append(f"Alternative: {finding['alternative']}")
 
             # Calculate error handling metrics
             try_blocks = len(re.findall(r"\+\s*try:", context.diff_content))
@@ -367,13 +490,22 @@ class ErrorHandlingTool(BaseTool):
                     "except_blocks": except_blocks,
                     "bare_except_blocks": bare_excepts,
                     "error_handling_issues": len(issues),
+                    "exception_coverage": (except_blocks - bare_excepts) / except_blocks
+                    if except_blocks > 0
+                    else 1.0,
+                    "rules_source": error_rules.get("source", "Unknown"),
+                    "rules_last_updated": error_rules.get("last_updated", 0),
                 }
             )
 
             positive_findings = []
             if try_blocks > 0 and bare_excepts == 0:
                 positive_findings.append(
-                    "Good exception handling with specific exception types"
+                    f"Good exception handling with specific exception types using {error_rules.get('source', 'current standards')}"
+                )
+            elif try_blocks == 0:
+                positive_findings.append(
+                    "No exception handling patterns detected in changes"
                 )
 
             return ToolResult(
@@ -384,6 +516,7 @@ class ErrorHandlingTool(BaseTool):
                 suggestions=suggestions,
                 positive_findings=positive_findings,
                 metrics=metrics,
+                references=references,
                 confidence_score=0.9,
                 error_message=None,
                 execution_time_ms=0,
@@ -399,55 +532,78 @@ class ErrorHandlingTool(BaseTool):
                 execution_time_ms=0,
             )
 
-    def _analyze_error_handling(self, diff_content: str) -> List[Dict[str, Any]]:
-        """Analyze error handling patterns"""
+    async def _analyze_error_handling(
+        self, diff_content: str, error_rules: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Analyze error handling patterns using standards-based rules"""
         findings = []
 
-        # Error handling anti-patterns
-        patterns = {
-            "bare_except": {
-                "regex": r"\+\s*except\s*:",
-                "severity": "high",
-                "description": "Bare except clause catches all exceptions",
-                "suggestion": "Catch specific exception types instead of using bare except",
-            },
-            "empty_except": {
-                "regex": r"\+\s*except.*:\s*\n\s*\+\s*pass",
-                "severity": "high",
-                "description": "Empty except block silently ignores errors",
-                "suggestion": "Handle exceptions appropriately or log the error",
-            },
-            "too_broad_except": {
-                "regex": r"\+\s*except\s+Exception\s*:",
-                "severity": "medium",
-                "description": "Catching Exception is too broad",
-                "suggestion": "Catch more specific exception types",
-            },
-            "missing_finally": {
-                "regex": r"\+\s*try:.*\n\s*\+\s*.*\n\s*\+\s*except.*:(?!.*finally)",
-                "severity": "low",
-                "description": "Try/except without finally block for cleanup",
-                "suggestion": "Consider using finally block or context managers for cleanup",
-            },
-            "exception_without_logging": {
-                "regex": r"\+\s*except.*:\s*\n\s*\+\s*(?!.*log).*return",
-                "severity": "medium",
-                "description": "Exception caught but not logged",
-                "suggestion": "Log exceptions for debugging and monitoring",
-            },
+        # Get patterns from current error handling standards
+        patterns = error_rules.get("patterns", {})
+
+        # Analyze each pattern type from standards
+        for pattern_name, pattern_info in patterns.items():
+            pattern_findings = self._detect_error_pattern_in_code(
+                diff_content, pattern_name, pattern_info
+            )
+            findings.extend(pattern_findings)
+
+        return findings
+
+    def _detect_error_pattern_in_code(
+        self, diff_content: str, pattern_name: str, pattern_info: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Detect specific error handling pattern in code based on pattern type"""
+        findings = []
+
+        # Define detection regex patterns based on pattern type
+        detection_patterns = {
+            "bare_except": [
+                r"\+\s*except\s*:",
+            ],
+            "broad_except": [
+                r"\+\s*except\s+Exception\s*:",
+                r"\+\s*except\s+BaseException\s*:",
+            ],
+            "silent_exception": [
+                r"\+\s*except.*:\s*\n\s*\+\s*pass",
+                r"\+\s*except.*:\s*\n\s*\+\s*(?!.*log).*return",
+                r"\+\s*except.*:\s*\n\s*\+\s*continue",
+            ],
+            "missing_finally": [
+                r"\+\s*try:.*\n\s*\+\s*.*\n\s*\+\s*except.*:(?!.*finally)",
+            ],
+            "exception_swallowing": [
+                r"\+\s*except.*:\s*\n\s*\+\s*pass\s*$",
+            ],
+            "logging_exception": [
+                r"\+\s*except.*:\s*\n\s*\+\s*(?!.*log).*",
+            ],
+            "resource_leak": [
+                r"\+\s*try:\s*\n\s*\+\s*.*open\(",  # File not closed in finally
+                r"\+\s*try:\s*\n\s*\+\s*.*connect\(",  # Connection not closed
+            ],
         }
 
-        for pattern_name, pattern_info in patterns.items():
+        # Get regex patterns for this pattern type
+        regexes = detection_patterns.get(pattern_name, [])
+
+        for regex in regexes:
             matches = re.finditer(
-                pattern_info["regex"], diff_content, re.MULTILINE | re.DOTALL
+                regex, diff_content, re.IGNORECASE | re.MULTILINE | re.DOTALL
             )
             for match in matches:
                 findings.append(
                     {
                         "pattern": pattern_name,
-                        "severity": pattern_info["severity"],
-                        "description": pattern_info["description"],
-                        "suggestion": pattern_info["suggestion"],
+                        "severity": pattern_info.get("severity", "medium"),
+                        "description": pattern_info.get(
+                            "description", f"Error handling issue: {pattern_name}"
+                        ),
+                        "recommendation": pattern_info.get(
+                            "recommendation", "Follow error handling best practices"
+                        ),
+                        "alternative": pattern_info.get("alternative", ""),
                         "evidence": match.group(0).strip(),
                         "line_number": diff_content[: match.start()].count("\n") + 1,
                     }
