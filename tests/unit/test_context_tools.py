@@ -6,11 +6,11 @@ Unit tests for Context7 integration tools
 import pytest
 
 from src.agents.tools.base import ToolCategory, ToolContext, ToolPriority
-from src.agents.tools.context_tools import (
-    APIUsageValidationTool,
+from src.agents.tools.python.context_tools import (
     Context7Client,
-    DocumentationLookupTool,
-    SecurityPatternValidationTool,
+    PythonAPIUsageValidationTool,
+    PythonDocumentationLookupTool,
+    PythonSecurityPatternValidationTool,
 )
 
 
@@ -63,13 +63,13 @@ class TestContext7Client:
         assert docs1 == docs2
 
 
-class TestDocumentationLookupTool:
-    """Test DocumentationLookupTool"""
+class TestPythonDocumentationLookupTool:
+    """Test PythonDocumentationLookupTool"""
 
     @pytest.fixture
     def tool(self):
         """Create a documentation lookup tool"""
-        return DocumentationLookupTool()
+        return PythonDocumentationLookupTool()
 
     @pytest.fixture
     def context_with_imports(self):
@@ -115,7 +115,7 @@ class TestDocumentationLookupTool:
         result = await tool.execute(context_with_imports)
 
         assert result.success is True
-        assert result.tool_name == "DocumentationLookupTool"
+        assert result.tool_name == "PythonDocumentationLookupTool"
         assert result.category == ToolCategory.DOCUMENTATION
         assert result.confidence_score > 0.5
 
@@ -174,13 +174,13 @@ class TestDocumentationLookupTool:
         assert len(analysis["suggestions"]) == 1
 
 
-class TestAPIUsageValidationTool:
-    """Test APIUsageValidationTool"""
+class TestPythonAPIUsageValidationTool:
+    """Test PythonAPIUsageValidationTool"""
 
     @pytest.fixture
     def tool(self):
         """Create an API validation tool"""
-        return APIUsageValidationTool()
+        return PythonAPIUsageValidationTool()
 
     @pytest.fixture
     def context_with_api_calls(self):
@@ -210,7 +210,7 @@ class TestAPIUsageValidationTool:
         result = await tool.execute(context_with_api_calls)
 
         assert result.success is True
-        assert result.tool_name == "APIUsageValidationTool"
+        assert result.tool_name == "PythonAPIUsageValidationTool"
         assert result.category == ToolCategory.CORRECTNESS
 
     def test_extract_api_calls(self, tool):
@@ -246,13 +246,13 @@ class TestAPIUsageValidationTool:
         assert len(validation["issues"]) == 0
 
 
-class TestSecurityPatternValidationTool:
-    """Test SecurityPatternValidationTool"""
+class TestPythonSecurityPatternValidationTool:
+    """Test PythonSecurityPatternValidationTool"""
 
     @pytest.fixture
     def tool(self):
         """Create a security validation tool"""
-        return SecurityPatternValidationTool()
+        return PythonSecurityPatternValidationTool()
 
     @pytest.fixture
     def context_with_security_issues(self):
@@ -301,7 +301,7 @@ class TestSecurityPatternValidationTool:
         result = await tool.execute(context_with_security_issues)
 
         assert result.success is True
-        assert result.tool_name == "SecurityPatternValidationTool"
+        assert result.tool_name == "PythonSecurityPatternValidationTool"
         assert result.category == ToolCategory.SECURITY
         assert len(result.issues) >= 1
         assert result.confidence_score > 0.9
@@ -410,9 +410,9 @@ class TestToolIntegration:
     async def test_multiple_tools_execution(self, context_complex):
         """Test executing multiple tools on the same context"""
         tools = [
-            DocumentationLookupTool(),
-            APIUsageValidationTool(),
-            SecurityPatternValidationTool(),
+            PythonDocumentationLookupTool(),
+            PythonAPIUsageValidationTool(),
+            PythonSecurityPatternValidationTool(),
         ]
 
         results = []

@@ -122,9 +122,9 @@ class Context7Client:
         return docs
 
 
-@register_tool(enabled=True, name="DocumentationLookupTool")
-class DocumentationLookupTool(BaseTool):
-    """Look up documentation for libraries and frameworks used in the code"""
+@register_tool(enabled=True, name="PythonDocumentationLookupTool")
+class PythonDocumentationLookupTool(BaseTool):
+    """Look up documentation for Python libraries and frameworks used in the code"""
 
     @property
     def category(self) -> ToolCategory:
@@ -274,9 +274,9 @@ class DocumentationLookupTool(BaseTool):
         return analysis
 
 
-@register_tool(enabled=True, name="APIUsageValidationTool")
-class APIUsageValidationTool(BaseTool):
-    """Validate API usage against official documentation"""
+@register_tool(enabled=True, name="PythonAPIUsageValidationTool")
+class PythonAPIUsageValidationTool(BaseTool):
+    """Validate Python API usage against official documentation"""
 
     @property
     def category(self) -> ToolCategory:
@@ -420,9 +420,9 @@ class APIUsageValidationTool(BaseTool):
         return validation
 
 
-@register_tool(enabled=True, name="SecurityPatternValidationTool")
-class SecurityPatternValidationTool(BaseTool):
-    """Validate security patterns against best practices documentation"""
+@register_tool(enabled=True, name="PythonSecurityPatternValidationTool")
+class PythonSecurityPatternValidationTool(BaseTool):
+    """Validate Python security patterns against best practices documentation"""
 
     @property
     def category(self) -> ToolCategory:
