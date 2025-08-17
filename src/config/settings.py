@@ -88,7 +88,7 @@ class Settings(BaseSettings):
 
     # Google Configuration
     google_api_key_raw: Optional[str] = Field(default=None, alias="google_api_key")
-    gemini_model_name: str = Field(default="gemini-1.5-pro")
+    gemini_model_name: str = Field(default="gemini-2.5-pro")
     google_base_url: Optional[str] = Field(default=None)
 
     @property

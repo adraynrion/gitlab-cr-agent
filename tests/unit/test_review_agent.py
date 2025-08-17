@@ -83,7 +83,7 @@ class TestCodeReviewAgent:
         """Create a mock review agent with Google model"""
         with patch("src.agents.code_reviewer.get_llm_model") as mock_get_model:
             mock_get_model.return_value = mock_google_model
-            agent = CodeReviewAgent(model_name="gemini:gemini-1.5-pro")
+            agent = CodeReviewAgent(model_name="gemini:gemini-2.5-pro")
             agent.agent.run = AsyncMock()
             return agent
 
@@ -206,11 +206,11 @@ index 123..456 100644
             with patch("src.agents.code_reviewer.get_llm_model") as mock_get_model:
                 mock_get_model.return_value = mock_google_model
 
-                agent = CodeReviewAgent(model_name="gemini:gemini-1.5-pro")
+                agent = CodeReviewAgent(model_name="gemini:gemini-2.5-pro")
 
-                assert agent.model_name == "gemini:gemini-1.5-pro"
+                assert agent.model_name == "gemini:gemini-2.5-pro"
                 assert agent.model == mock_google_model
-                mock_get_model.assert_called_once_with("gemini:gemini-1.5-pro")
+                mock_get_model.assert_called_once_with("gemini:gemini-2.5-pro")
 
         def test_init_with_fallback_model(self, mock_fallback_model):
             """Test initialization with fallback model"""
