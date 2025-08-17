@@ -15,9 +15,10 @@ class Settings(BaseSettings):
     """Application settings with environment variable support"""
 
     model_config = {
-        "env_file": ".env",
+        "env_file": ".env" if os.getenv("TESTING") != "true" else None,
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
+        "extra": "ignore",
     }
 
     # Environment
@@ -27,8 +28,15 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
 
     # GitLab Configuration
-    gitlab_url: str = Field(default="", min_length=1)
-    gitlab_token_raw: str = Field(default="", min_length=1, alias="gitlab_token")
+    gitlab_url: str = Field(
+        default="https://gitlab.example.com" if os.getenv("TESTING") == "true" else "",
+        min_length=1,
+    )
+    gitlab_token_raw: str = Field(
+        default="glpat-test-token-1234567890" if os.getenv("TESTING") == "true" else "",
+        min_length=1,
+        alias="gitlab_token",
+    )
     gitlab_webhook_secret_raw: Optional[str] = Field(
         default=None, alias="gitlab_webhook_secret"
     )
@@ -202,5 +210,13 @@ class Settings(BaseSettings):
         return f"<{self.__class__.__name__} gitlab_url={self.gitlab_url} environment={self.environment}>"
 
 
-# Create global settings instance
-settings = Settings()
+# Create global settings instance (skip during testing)
+settings = None if os.getenv("TESTING") == "true" else Settings()
+
+
+def get_settings() -> Settings:
+    """Get settings instance (for testing compatibility)"""
+    global settings
+    if settings is None:
+        settings = Settings()
+    return settings

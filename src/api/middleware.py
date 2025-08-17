@@ -15,7 +15,7 @@ from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from src.config.settings import settings
+from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,9 @@ def set_request_id(request_id: str) -> None:
 
 
 # Create rate limiter instance
-limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
+limiter = Limiter(
+    key_func=get_remote_address, enabled=get_settings().rate_limit_enabled
+)
 
 # Security headers configuration
 secure_headers = secure.Secure(
@@ -66,6 +68,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        settings = get_settings()
         # Check request size limits
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > settings.max_request_size:
@@ -101,6 +104,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        settings = get_settings()
         # Skip auth if no API key is configured - all endpoints are public
         if not settings.api_key:
             return await call_next(request)  # type: ignore[no-any-return]

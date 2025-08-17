@@ -129,16 +129,33 @@ class PythonPerformancePatternTool(BaseTool):
             )
 
     def _detect_framework(self, diff_content: str) -> Optional[str]:
-        """Detect which framework is being used in the code"""
-        framework_patterns = {
-            "fastapi": r"from\s+fastapi|import\s+fastapi|@app\.(get|post|put|delete)",
-            "django": r"from\s+django|import\s+django|class.*\(Model\)",
-            "flask": r"from\s+flask|import\s+flask|@app\.route",
-            "sqlalchemy": r"from\s+sqlalchemy|import\s+sqlalchemy",
+        """Detect which framework is being used in the code using fast string operations"""
+        # Convert to lowercase once for case-insensitive matching
+        content_lower = diff_content.lower()
+
+        # Fast string containment checks (replace 4 regex patterns)
+        framework_indicators = {
+            "fastapi": [
+                "from fastapi",
+                "import fastapi",
+                "@app.get",
+                "@app.post",
+                "@app.put",
+                "@app.delete",
+            ],
+            "django": [
+                "from django",
+                "import django",
+                "(model)",
+                "class meta:",
+                "django.db",
+            ],
+            "flask": ["from flask", "import flask", "@app.route", "flask."],
+            "sqlalchemy": ["from sqlalchemy", "import sqlalchemy", "sqlalchemy."],
         }
 
-        for framework, pattern in framework_patterns.items():
-            if re.search(pattern, diff_content, re.IGNORECASE):
+        for framework, indicators in framework_indicators.items():
+            if any(indicator in content_lower for indicator in indicators):
                 return framework
 
         return None
@@ -168,62 +185,124 @@ class PythonPerformancePatternTool(BaseTool):
     def _detect_performance_pattern_in_code(
         self, diff_content: str, pattern_name: str, pattern_info: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Detect specific performance pattern in code based on pattern type"""
+        """Detect performance patterns using optimized AST + text analysis"""
+        from .code_parser import get_parser
+
         findings = []
+        parser = get_parser()
 
-        # Define detection regex patterns based on pattern type
-        detection_patterns = {
-            "string_concatenation": [
-                r"\+\s*for\s+.*:\s*\n\s*\+\s*.*\+=.*\+",
-                r"\+\s*.*\+=\s*.*\+.*\+.*",  # Multiple string concatenations
-            ],
-            "membership_test": [
-                r"\+\s*.*in\s+\[.*\]",
-                r"\+\s*.*not\s+in\s+\[.*\]",
-            ],
-            "repeated_function_calls": [
-                r"\+\s*for\s+.*:\s*.*len\(",
-                r"\+\s*while\s+.*len\(",
-            ],
-            "memory_usage": [
-                r"\+\s*list\(\[.*for.*\]\)",  # Unnecessary list() around comprehension
-                r"\+\s*.*\.copy\(\)\s*\+",  # Unnecessary copying
-            ],
-            "sync_in_async": [
-                r"\+\s*async\s+def.*:\s*.*\n\s*\+\s*.*time\.sleep\(",
-                r"\+\s*async\s+def.*:\s*.*\n\s*\+\s*.*requests\.",
-            ],
-            "n_plus_one": [
-                r"\+\s*for\s+.*:\s*\n\s*\+\s*.*\.get\(",
-                r"\+\s*for\s+.*:\s*\n\s*\+\s*.*\.filter\(",
-            ],
-            "inefficient_dict_access": [
-                r"\+\s*if\s+.*in\s+.*\.keys\(\)",
-                r"\+\s*for\s+.*in\s+.*\.keys\(\)",
-            ],
-        }
+        # Use AST-based performance pattern detection
+        ast_patterns = parser.extract_performance_patterns(diff_content)
 
-        # Get regex patterns for this pattern type
-        regexes = detection_patterns.get(pattern_name, [])
-
-        for regex in regexes:
-            matches = re.finditer(regex, diff_content, re.IGNORECASE | re.MULTILINE)
-            for match in matches:
+        # Filter patterns by type
+        for pattern in ast_patterns:
+            if pattern["type"] == pattern_name:
                 findings.append(
                     {
                         "pattern": pattern_name,
-                        "severity": pattern_info.get("severity", "medium"),
+                        "severity": pattern_info.get("severity", pattern["severity"]),
                         "description": pattern_info.get(
-                            "description", f"Performance issue: {pattern_name}"
+                            "description", pattern["description"]
                         ),
                         "recommendation": pattern_info.get(
-                            "recommendation", "Follow performance best practices"
+                            "recommendation",
+                            pattern.get("suggestion", "Optimize performance"),
                         ),
-                        "alternative": pattern_info.get("alternative", ""),
-                        "evidence": match.group(0).strip(),
-                        "line_number": diff_content[: match.start()].count("\n") + 1,
+                        "evidence": pattern["evidence"],
+                        "line": pattern.get("line", 0),
                     }
                 )
+
+        # Additional text-based detection for complex patterns
+        text_patterns = self._detect_text_performance_patterns(
+            diff_content, pattern_name, pattern_info
+        )
+        findings.extend(text_patterns)
+
+        return findings
+
+    def _detect_text_performance_patterns(
+        self, diff_content: str, pattern_name: str, pattern_info: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Text-based performance pattern detection for complex cases"""
+        findings = []
+        added_lines = [
+            line.strip()
+            for line in diff_content.split("\n")
+            if line.strip().startswith("+") and not line.strip().startswith("+++")
+        ]
+
+        for i, line in enumerate(added_lines):
+            code_line = line[1:].strip()
+
+            # N+1 query detection (requires context analysis)
+            if pattern_name == "n_plus_one":
+                if "for " in code_line and i + 1 < len(added_lines):
+                    next_line = added_lines[i + 1][1:].strip()
+                    if any(
+                        db_method in next_line
+                        for db_method in [".get(", ".filter(", ".query("]
+                    ):
+                        findings.append(
+                            {
+                                "pattern": pattern_name,
+                                "severity": pattern_info.get("severity", "high"),
+                                "description": pattern_info.get(
+                                    "description", "Potential N+1 query pattern"
+                                ),
+                                "recommendation": pattern_info.get(
+                                    "recommendation", "Use bulk operations or joins"
+                                ),
+                                "evidence": f"{code_line} -> {next_line}",
+                                "line": i + 1,
+                            }
+                        )
+
+            # Inefficient dict access
+            elif pattern_name == "inefficient_dict_access":
+                if ".keys()" in code_line and (
+                    " in " in code_line or "for " in code_line
+                ):
+                    findings.append(
+                        {
+                            "pattern": pattern_name,
+                            "severity": pattern_info.get("severity", "medium"),
+                            "description": pattern_info.get(
+                                "description", "Inefficient dictionary key access"
+                            ),
+                            "recommendation": pattern_info.get(
+                                "recommendation", "Use direct key access or .items()"
+                            ),
+                            "evidence": code_line,
+                            "line": i + 1,
+                        }
+                    )
+
+            # Sync operations in async context
+            elif pattern_name == "sync_in_async":
+                if any(
+                    sync_op in code_line
+                    for sync_op in ["time.sleep(", "requests.", "urllib."]
+                ):
+                    # Check if we're in an async function (simplified check)
+                    for j in range(max(0, i - 10), i):
+                        if "async def" in added_lines[j]:
+                            findings.append(
+                                {
+                                    "pattern": pattern_name,
+                                    "severity": pattern_info.get("severity", "high"),
+                                    "description": pattern_info.get(
+                                        "description",
+                                        "Synchronous operation in async function",
+                                    ),
+                                    "recommendation": pattern_info.get(
+                                        "recommendation", "Use async alternatives"
+                                    ),
+                                    "evidence": code_line,
+                                    "line": i + 1,
+                                }
+                            )
+                            break
 
         return findings
 
@@ -236,8 +315,12 @@ class PythonPerformancePatternTool(BaseTool):
         # Get database patterns from performance rules
         patterns = performance_rules.get("patterns", {})
 
-        # N+1 query pattern detection
-        if re.search(
+        # N+1 query pattern detection using cached patterns
+        from .code_parser import get_compiled_patterns
+
+        patterns_cache = get_compiled_patterns()
+
+        if patterns_cache.search(
             r"\+\s*for\s+.*:\s*\n\s*\+\s*.*\.get\(", diff_content, re.MULTILINE
         ):
             n_plus_one_info = patterns.get(
@@ -267,7 +350,7 @@ class PythonPerformancePatternTool(BaseTool):
             )
 
         # Missing database indexes
-        if re.search(r"\+\s*.*\.filter\(.*=.*\)", diff_content):
+        if patterns_cache.search(r"\+\s*.*\.filter\(.*=.*\)", diff_content):
             index_info = patterns.get(
                 "missing_index",
                 {
@@ -334,9 +417,18 @@ class PythonAsyncPatternValidationTool(BaseTool):
                 if finding.get("suggestion"):
                     suggestions.append(finding["suggestion"])
 
-            # Calculate async metrics
-            async_funcs = len(re.findall(r"\+\s*async\s+def", context.diff_content))
-            await_calls = len(re.findall(r"\+\s*.*await\s+", context.diff_content))
+            # Calculate async metrics using fast line counting
+            async_funcs = 0
+            await_calls = 0
+
+            for line in context.diff_content.split("\n"):
+                stripped = line.strip()
+                if stripped.startswith("+"):
+                    code_line = stripped[1:].strip()
+                    if "async def" in code_line:
+                        async_funcs += 1
+                    if "await " in code_line:
+                        await_calls += 1
 
             metrics.update(
                 {
@@ -479,10 +571,22 @@ class PythonErrorHandlingTool(BaseTool):
                 if finding.get("alternative"):
                     suggestions.append(f"Alternative: {finding['alternative']}")
 
-            # Calculate error handling metrics
-            try_blocks = len(re.findall(r"\+\s*try:", context.diff_content))
-            except_blocks = len(re.findall(r"\+\s*except", context.diff_content))
-            bare_excepts = len(re.findall(r"\+\s*except:", context.diff_content))
+            # Calculate error handling metrics using fast line counting
+            try_blocks = 0
+            except_blocks = 0
+            bare_excepts = 0
+
+            # Process only added lines for counting
+            for line in context.diff_content.split("\n"):
+                stripped = line.strip()
+                if stripped.startswith("+"):
+                    code_line = stripped[1:].strip()
+                    if code_line.startswith("try:"):
+                        try_blocks += 1
+                    elif code_line.startswith("except"):
+                        except_blocks += 1
+                        if code_line == "except:":  # Bare except
+                            bare_excepts += 1
 
             metrics.update(
                 {
