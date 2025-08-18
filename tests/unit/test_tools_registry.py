@@ -139,7 +139,7 @@ class TestToolRegistry:
         """Test registry configuration from settings"""
         # Mock settings
         settings = Mock()
-        settings.tools_enabled = True
+        settings.context7_enabled = True
         mock_get_settings.return_value = settings
 
         registry = ToolRegistry()
