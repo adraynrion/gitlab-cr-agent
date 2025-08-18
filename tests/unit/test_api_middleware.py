@@ -37,7 +37,7 @@ class TestSecurityMiddleware:
 
     @pytest.mark.asyncio
     async def test_security_middleware_call_method(self):
-        """Test SecurityMiddleware __call__ method"""
+        """Test SecurityMiddleware dispatch method"""
         app = FastAPI()
         middleware = SecurityMiddleware(app)
 
@@ -45,13 +45,16 @@ class TestSecurityMiddleware:
         request.headers = {}
         request.method = "GET"
         request.url.path = "/test"
+        request.client = Mock()
+        request.client.host = "127.0.0.1"
 
         call_next = AsyncMock()
         mock_response = Mock(spec=Response)
         mock_response.headers = {}
         call_next.return_value = mock_response
 
-        response = await middleware(request, call_next)
+        # Call dispatch method instead of calling middleware directly
+        response = await middleware.dispatch(request, call_next)
 
         assert response == mock_response
         call_next.assert_called_once_with(request)
@@ -66,18 +69,25 @@ class TestSecurityMiddleware:
         request.headers = {}
         request.method = "POST"
         request.url.path = "/api/test"
+        request.client = Mock()
+        request.client.host = "127.0.0.1"
 
         call_next = AsyncMock()
         mock_response = Mock(spec=Response)
         mock_response.headers = {}
         call_next.return_value = mock_response
 
-        await middleware(request, call_next)
+        # Mock settings to be production to ensure headers are added
+        with patch("src.api.middleware.get_settings") as mock_settings:
+            mock_settings.return_value.is_production = True
+            mock_settings.return_value.max_request_size = 10485760
 
-        # Should add security headers
-        assert "X-Content-Type-Options" in mock_response.headers
-        assert "X-Frame-Options" in mock_response.headers
-        assert "X-XSS-Protection" in mock_response.headers
+            response = await middleware.dispatch(request, call_next)
+
+            # Should add security headers in production
+            assert "X-Content-Type-Options" in response.headers
+            assert "X-Frame-Options" in response.headers
+            assert "X-XSS-Protection" in response.headers
 
     @pytest.mark.asyncio
     async def test_security_middleware_with_different_methods(self):
@@ -92,14 +102,20 @@ class TestSecurityMiddleware:
             request.headers = {}
             request.method = method
             request.url.path = f"/test-{method.lower()}"
+            request.client = Mock()
+            request.client.host = "127.0.0.1"
 
             call_next = AsyncMock()
             mock_response = Mock(spec=Response)
             mock_response.headers = {}
             call_next.return_value = mock_response
 
-            response = await middleware(request, call_next)
-            assert response == mock_response
+            with patch("src.api.middleware.get_settings") as mock_settings:
+                mock_settings.return_value.max_request_size = 10485760
+                mock_settings.return_value.is_production = False
+
+                response = await middleware.dispatch(request, call_next)
+                assert response == mock_response
 
 
 class TestRequestTracingMiddleware:
@@ -116,6 +132,8 @@ class TestRequestTracingMiddleware:
         request.method = "GET"
         request.url.path = "/test"
         request.headers = {"User-Agent": "test-agent"}
+        request.query_params = {}
+        request.client = Mock()
         request.client.host = "127.0.0.1"
 
         call_next = AsyncMock()
@@ -125,7 +143,7 @@ class TestRequestTracingMiddleware:
         call_next.return_value = mock_response
 
         with patch("src.api.middleware.time.time", side_effect=[1000.0, 1001.0]):
-            response = await middleware(request, call_next)
+            response = await middleware.dispatch(request, call_next)
 
         assert response == mock_response
         mock_logger.info.assert_called()
@@ -141,6 +159,8 @@ class TestRequestTracingMiddleware:
         request.method = "POST"
         request.url.path = "/error"
         request.headers = {"User-Agent": "test-agent"}
+        request.query_params = {}
+        request.client = Mock()
         request.client.host = "192.168.1.1"
 
         call_next = AsyncMock()
@@ -149,11 +169,13 @@ class TestRequestTracingMiddleware:
         mock_response.headers = {}
         call_next.return_value = mock_response
 
-        with patch("src.api.middleware.time.time", side_effect=[1000.0, 1002.0]):
-            response = await middleware(request, call_next)
+        with patch(
+            "src.api.middleware.time.time", side_effect=[1000.0, 1006.0]
+        ):  # 6 seconds = slow request
+            response = await middleware.dispatch(request, call_next)
 
         assert response == mock_response
-        mock_logger.warning.assert_called()
+        mock_logger.warning.assert_called()  # Should be called for slow request (>5s)
 
     @pytest.mark.asyncio
     @patch("src.api.middleware.logger")
@@ -166,6 +188,8 @@ class TestRequestTracingMiddleware:
         request.method = "PUT"
         request.url.path = "/exception"
         request.headers = {"User-Agent": "test-agent"}
+        request.query_params = {}
+        request.client = Mock()
         request.client.host = "10.0.0.1"
 
         call_next = AsyncMock()
@@ -173,7 +197,7 @@ class TestRequestTracingMiddleware:
 
         with patch("src.api.middleware.time.time", return_value=1000.0):
             with pytest.raises(Exception):
-                await middleware(request, call_next)
+                await middleware.dispatch(request, call_next)
 
         mock_logger.error.assert_called()
 
@@ -188,6 +212,7 @@ class TestRequestTracingMiddleware:
         request.method = "GET"
         request.url.path = "/no-client"
         request.headers = {"User-Agent": "test-agent"}
+        request.query_params = {}
         request.client = None
 
         call_next = AsyncMock()
@@ -197,7 +222,7 @@ class TestRequestTracingMiddleware:
         call_next.return_value = mock_response
 
         with patch("src.api.middleware.time.time", side_effect=[1000.0, 1001.0]):
-            response = await middleware(request, call_next)
+            response = await middleware.dispatch(request, call_next)
 
         assert response == mock_response
 
@@ -331,9 +356,14 @@ class TestMiddlewareIntegration:
 
         client = TestClient(app)
 
-        response = client.get("/secure")
-        assert response.status_code == 200
-        assert "X-Content-Type-Options" in response.headers
+        # Mock settings to be production to ensure headers are added
+        with patch("src.api.middleware.get_settings") as mock_settings:
+            mock_settings.return_value.is_production = True
+            mock_settings.return_value.max_request_size = 10485760
+
+            response = client.get("/secure")
+            assert response.status_code == 200
+            assert "X-Content-Type-Options" in response.headers
 
     def test_multiple_middleware_order(self):
         """Test multiple middleware execution order"""
@@ -350,11 +380,15 @@ class TestMiddlewareIntegration:
         client = TestClient(app)
 
         with patch("src.api.middleware.logger") as mock_logger:
-            response = client.get("/test-order")
-            assert response.status_code == 200
+            with patch("src.api.middleware.get_settings") as mock_settings:
+                mock_settings.return_value.is_production = True
+                mock_settings.return_value.max_request_size = 10485760
 
-            # Should have security headers
-            assert "X-Content-Type-Options" in response.headers
+                response = client.get("/test-order")
+                assert response.status_code == 200
+
+                # Should have security headers
+                assert "X-Content-Type-Options" in response.headers
 
             # Should have logged the request
             mock_logger.info.assert_called()

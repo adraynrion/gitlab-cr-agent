@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gitlab-ai-reviewer"
-version = "3.4.1"
+version = "3.5.0"
 description = "AI-powered code review automation for GitLab using PydanticAI"
 authors = [
     {name = "Adraynrion", email = "adraynrion@pm.me"}
@@ -46,9 +46,8 @@ dependencies = [
     "secure>=0.3.0",
     "tenacity>=8.2.0",
     "cryptography>=41.0.0",
-    # Monitoring and logging
-    "structlog==24.1.0",
-    "prometheus-client==0.19.0"
+    # Circuit breaker for async
+    "aiocircuitbreaker>=2.0.0"
 ]
 
 [project.optional-dependencies]

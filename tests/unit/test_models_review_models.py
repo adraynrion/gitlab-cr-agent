@@ -366,7 +366,7 @@ class TestReviewModelsIntegration:
 
         # Create result, serialize to JSON, then deserialize
         original_result = ReviewResult(**result_data)
-        json_str = original_result.json()
+        json_str = original_result.model_dump_json()
         parsed_data = json.loads(json_str)
         recreated_result = ReviewResult(**parsed_data)
 

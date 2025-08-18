@@ -11,6 +11,22 @@ services:
     networks:
       - ai-reviewer
     restart: unless-stopped
+    depends_on:
+      - context7
+    environment:
+      - CONTEXT7_API_URL=http://context7:8080
+
+  context7:
+    container_name: context7-mcp
+    image: node:18-alpine
+    command: sh -c "npm install -g @upstash/context7-mcp@1.0.14 && npx @upstash/context7-mcp --port 8080 --host 0.0.0.0"
+    expose:
+      - "8080"
+    networks:
+      - ai-reviewer
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
 
 networks:
   ai-reviewer:
