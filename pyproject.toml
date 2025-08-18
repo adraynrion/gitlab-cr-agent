@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gitlab-ai-reviewer"
-version = "3.6.0"
+version = "3.7.0"
 description = "AI-powered code review automation for GitLab using PydanticAI"
 authors = [
     {name = "Adraynrion", email = "adraynrion@pm.me"}
@@ -25,7 +25,7 @@ classifiers = [
 
 dependencies = [
     # Core AI framework
-    "pydantic-ai==0.6.2",
+    "pydantic-ai[mcp]==0.6.2",
     # Web framework
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
