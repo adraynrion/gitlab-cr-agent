@@ -58,23 +58,59 @@ class TestGetLLMModel:
             # Any other exception is unexpected
             pytest.fail(f"Unexpected exception: {e}")
 
-    def test_get_llm_model_openai_without_key(self):
+    @patch("src.agents.providers.get_settings")
+    def test_get_llm_model_openai_without_key(self, mock_get_settings):
         """Test OpenAI provider without API key"""
+        # Mock settings with no API key
+        mock_settings = type(
+            "Settings", (), {"openai_api_key": None, "openai_model_name": "gpt-4o"}
+        )()
+        mock_get_settings.return_value = mock_settings
+
         with patch.dict(os.environ, {}, clear=True):
             with pytest.raises((AIProviderException, ConfigurationException)):
                 get_llm_model("openai:gpt-4")
 
-    def test_get_llm_model_anthropic_without_key(self):
+    @patch("src.agents.providers.get_settings")
+    def test_get_llm_model_anthropic_without_key(self, mock_get_settings):
         """Test Anthropic provider without API key"""
+        # Mock settings with no API key
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "anthropic_api_key": None,
+                "anthropic_model_name": "claude-3-5-sonnet-latest",
+                "anthropic_base_url": None,
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
         with patch.dict(os.environ, {}, clear=True):
             with pytest.raises((AIProviderException, ConfigurationException)):
                 get_llm_model("anthropic:claude-3")
 
-    def test_get_llm_model_google_without_key(self):
+    @patch("src.agents.providers.get_settings")
+    def test_get_llm_model_google_without_key(self, mock_get_settings):
         """Test Google provider without API key"""
+        # Mock settings with no API key
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "google_api_key": None,
+                "gemini_model_name": "gemini-2.5-pro",
+                "google_base_url": None,
+                "openai_api_key": None,  # Also need OpenAI settings for fallback
+                "openai_model_name": "gpt-4o",
+                "openai_base_url": None,
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
         with patch.dict(os.environ, {}, clear=True):
             with pytest.raises((AIProviderException, ConfigurationException)):
-                get_llm_model("google:gemini-pro")
+                get_llm_model("gemini:gemini-pro")
 
     @patch.dict(
         os.environ,
@@ -131,20 +167,59 @@ class TestIndividualProviders:
         # Should return a PydanticAI GoogleModel
         assert hasattr(model, "model_name") or hasattr(model, "name")
 
-    def test_get_openai_model_without_key(self):
+    @patch("src.agents.providers.get_settings")
+    def test_get_openai_model_without_key(self, mock_get_settings):
         """Test OpenAI model creation without API key"""
+        # Mock settings with no API key
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "openai_api_key": None,
+                "openai_model_name": "gpt-4o",
+                "openai_base_url": None,
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
         with patch.dict(os.environ, {}, clear=True):
             with pytest.raises((AIProviderException, ConfigurationException)):
                 get_openai_model()
 
-    def test_get_anthropic_model_without_key(self):
+    @patch("src.agents.providers.get_settings")
+    def test_get_anthropic_model_without_key(self, mock_get_settings):
         """Test Anthropic model creation without API key"""
+        # Mock settings with no API key
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "anthropic_api_key": None,
+                "anthropic_model_name": "claude-3-5-sonnet-latest",
+                "anthropic_base_url": None,
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
         with patch.dict(os.environ, {}, clear=True):
             with pytest.raises((AIProviderException, ConfigurationException)):
                 get_anthropic_model()
 
-    def test_get_google_model_without_key(self):
+    @patch("src.agents.providers.get_settings")
+    def test_get_google_model_without_key(self, mock_get_settings):
         """Test Google model creation without API key"""
+        # Mock settings with no API key
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "google_api_key": None,
+                "gemini_model_name": "gemini-2.5-pro",
+                "google_base_url": None,
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
         with patch.dict(os.environ, {}, clear=True):
             with pytest.raises((AIProviderException, ConfigurationException)):
                 get_google_model()
@@ -153,8 +228,27 @@ class TestIndividualProviders:
 class TestErrorHandling:
     """Test error handling scenarios"""
 
-    def test_provider_availability_without_keys(self):
+    @patch("src.agents.providers.get_settings")
+    def test_provider_availability_without_keys(self, mock_get_settings):
         """Test provider availability without any API keys"""
+        # Mock settings with no API keys
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "openai_api_key": None,
+                "anthropic_api_key": None,
+                "google_api_key": None,
+                "openai_model_name": "gpt-4o",
+                "anthropic_model_name": "claude-3-5-sonnet-latest",
+                "gemini_model_name": "gemini-2.5-pro",
+                "openai_base_url": None,
+                "anthropic_base_url": None,
+                "google_base_url": None,
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
         with patch.dict(os.environ, {}, clear=True):
             # All providers should raise exceptions
             with pytest.raises((AIProviderException, ConfigurationException)):

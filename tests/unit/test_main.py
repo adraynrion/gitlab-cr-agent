@@ -151,8 +151,10 @@ class TestResourceManagement:
         with patch(
             "src.main.initialize_review_agent", return_value=mock_agent
         ) as mock_init:
-            with patch("src.main.settings") as mock_settings:
+            with patch("src.config.settings.get_settings") as mock_get_settings:
+                mock_settings = Mock()
                 mock_settings.ai_model = "test-model"
+                mock_get_settings.return_value = mock_settings
 
                 await initialize_resources()
 
@@ -184,16 +186,14 @@ class TestResourceManagement:
         mock_agent.close = AsyncMock()
         app_state.mark_initialized(mock_agent)
 
-        with patch("src.utils.secrets.clear_secrets_cache") as mock_clear_cache:
-            await cleanup_resources()
+        # No need to patch secrets cache - module was removed
+        await cleanup_resources()
 
-            # Should call agent cleanup
-            mock_agent.close.assert_called_once()
-            # Should clear secrets cache
-            mock_clear_cache.assert_called_once()
-            # Should clear app state
-            assert app_state.is_initialized() is False
-            assert app_state.get_review_agent() is None
+        # Should call agent cleanup
+        mock_agent.close.assert_called_once()
+        # Should clear app state
+        assert app_state.is_initialized() is False
+        assert app_state.get_review_agent() is None
 
     @pytest.mark.asyncio
     async def test_cleanup_resources_sync_agent_close(self):
@@ -204,10 +204,10 @@ class TestResourceManagement:
         mock_agent.close = Mock()  # Sync close method
         app_state.mark_initialized(mock_agent)
 
-        with patch("src.utils.secrets.clear_secrets_cache"):
-            await cleanup_resources()
+        # No need to patch secrets cache - module was removed
+        await cleanup_resources()
 
-            mock_agent.close.assert_called_once()
+        mock_agent.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cleanup_resources_no_agent(self):
@@ -216,10 +216,12 @@ class TestResourceManagement:
 
         app_state.clear()  # Ensure no agent
 
-        with patch("src.utils.secrets.clear_secrets_cache") as mock_clear_cache:
-            await cleanup_resources()
+        # No need to patch secrets cache - module was removed
+        await cleanup_resources()
 
-            mock_clear_cache.assert_called_once()
+        # Should clear app state
+        assert app_state.is_initialized() is False
+        assert app_state.get_review_agent() is None
 
     @pytest.mark.asyncio
     async def test_cleanup_resources_error_handling(self):
@@ -231,8 +233,8 @@ class TestResourceManagement:
         app_state.mark_initialized(mock_agent)
 
         # Should not raise exception even if cleanup fails
-        with patch("src.utils.secrets.clear_secrets_cache"):
-            await cleanup_resources()
+        # No need to patch secrets cache - module was removed
+        await cleanup_resources()
 
 
 class TestExceptionHandlers:
@@ -406,8 +408,10 @@ class TestMiddlewareConfiguration:
     def test_cors_middleware_with_origins(self):
         """Test CORS middleware configuration when origins are set."""
         # CORS middleware is configured at app startup, so we just verify the setup logic
-        with patch("src.main.settings") as mock_settings:
+        with patch("src.config.settings.get_settings") as mock_get_settings:
+            mock_settings = Mock()
             mock_settings.allowed_origins = ["https://example.com"]
+            mock_get_settings.return_value = mock_settings
 
             # Test that the app can handle requests (CORS is configured at startup)
             client = TestClient(app)
@@ -418,8 +422,10 @@ class TestMiddlewareConfiguration:
 
     def test_cors_middleware_without_origins(self):
         """Test behavior when no CORS origins are configured."""
-        with patch("src.main.settings") as mock_settings:
+        with patch("src.config.settings.get_settings") as mock_get_settings:
+            mock_settings = Mock()
             mock_settings.allowed_origins = []
+            mock_get_settings.return_value = mock_settings
 
             # Should not add CORS middleware
             # This is tested by checking the middleware setup doesn't fail
@@ -444,12 +450,14 @@ class TestRootEndpoint:
         mock_agent = Mock()
         app_state.mark_initialized(mock_agent)
 
-        with patch("src.main.settings") as mock_settings:
+        with patch("src.main.get_settings") as mock_get_settings:
+            mock_settings = Mock()
             mock_settings.environment = "test"
             mock_settings.rate_limit_enabled = True
             mock_settings.allowed_origins = ["https://example.com"]
             mock_settings.api_key = "test-key"
             mock_settings.gitlab_webhook_secret = "test-secret"
+            mock_get_settings.return_value = mock_settings
 
             client = TestClient(app)
             response = client.get("/")
@@ -514,10 +522,12 @@ class TestApplicationLifecycle:
 
         with patch("src.main.initialize_resources") as mock_init:
             with patch("src.main.cleanup_resources") as mock_cleanup:
-                with patch("src.main.settings") as mock_settings:
+                with patch("src.config.settings.get_settings") as mock_get_settings:
+                    mock_settings = Mock()
                     mock_settings.environment = "test"
                     mock_settings.gitlab_url = "https://gitlab.example.com"
                     mock_settings.rate_limit_enabled = True
+                    mock_get_settings.return_value = mock_settings
 
                     async with lifespan(mock_app):
                         # During the context, resources should be initialized

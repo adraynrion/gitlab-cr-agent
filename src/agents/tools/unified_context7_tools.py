@@ -72,7 +72,7 @@ class Context7DocumentationValidationTool(BaseTool):
             # For each library, use Context7's validate_code_against_docs
             for library in libraries:
                 try:
-                    validation = validate_api_usage(
+                    validation = await validate_api_usage(
                         library_name=library,
                         code_snippet=context.diff_content,
                         context="security performance best_practices",

@@ -54,7 +54,7 @@ class TestGitLabUser:
         }
 
         user = GitLabUser(**user_data)
-        user_dict = user.dict()
+        user_dict = user.model_dump()
 
         assert user_dict["id"] == 1
         assert user_dict["username"] == "testuser"
@@ -72,7 +72,7 @@ class TestGitLabUser:
 
         # Create user, serialize to JSON, then deserialize
         original_user = GitLabUser(**user_data)
-        json_str = original_user.json()
+        json_str = original_user.model_dump_json()
         parsed_data = json.loads(json_str)
         recreated_user = GitLabUser(**parsed_data)
 
@@ -91,7 +91,12 @@ class TestGitLabProject:
             "id": 1,
             "name": "test-project",
             "web_url": "https://gitlab.com/test/project",
+            "git_ssh_url": "git@gitlab.com:test/project.git",
+            "git_http_url": "https://gitlab.com/test/project.git",
+            "namespace": "test",
+            "visibility_level": 0,
             "path_with_namespace": "test/project",
+            "default_branch": "main",
         }
 
         project = GitLabProject(**project_data)
@@ -106,9 +111,13 @@ class TestGitLabProject:
             "id": 2,
             "name": "full-project",
             "web_url": "https://gitlab.com/test/full",
+            "git_ssh_url": "git@gitlab.com:test/full.git",
+            "git_http_url": "https://gitlab.com/test/full.git",
+            "namespace": "test",
+            "visibility_level": 0,
             "path_with_namespace": "test/full",
-            "description": "A full test project",
             "default_branch": "main",
+            "description": "A full test project",
         }
 
         project = GitLabProject(**project_data)
@@ -121,7 +130,12 @@ class TestGitLabProject:
             "id": 3,
             "name": "minimal-project",
             "web_url": "https://gitlab.com/test/minimal",
+            "git_ssh_url": "git@gitlab.com:test/minimal.git",
+            "git_http_url": "https://gitlab.com/test/minimal.git",
+            "namespace": "test",
+            "visibility_level": 0,
             "path_with_namespace": "test/minimal",
+            "default_branch": "main",
         }
 
         project = GitLabProject(**project_data)
@@ -135,6 +149,7 @@ class TestMergeRequestAttributes:
     def test_valid_mr_attributes_creation(self):
         """Test creating valid merge request attributes"""
         mr_data = {
+            "id": 1,
             "iid": 1,
             "title": "Test MR",
             "description": "Test merge request",
@@ -143,6 +158,34 @@ class TestMergeRequestAttributes:
             "state": "opened",
             "created_at": "2023-01-01T00:00:00Z",
             "updated_at": "2023-01-01T00:00:00Z",
+            "source_project_id": 1,
+            "target_project_id": 1,
+            "author_id": 1,
+            "url": "https://gitlab.com/test/repo/-/merge_requests/1",
+            "source": {
+                "name": "test-project",
+                "ssh_url": "git@gitlab.com:test/repo.git",
+                "http_url": "https://gitlab.com/test/repo.git",
+                "web_url": "https://gitlab.com/test/repo",
+                "visibility_level": 0,
+                "namespace": "test-namespace",
+            },
+            "target": {
+                "name": "test-project",
+                "ssh_url": "git@gitlab.com:test/repo.git",
+                "http_url": "https://gitlab.com/test/repo.git",
+                "web_url": "https://gitlab.com/test/repo",
+                "visibility_level": 0,
+                "namespace": "test-namespace",
+            },
+            "last_commit": {
+                "id": "abc123",
+                "message": "Test commit",
+                "timestamp": "2023-01-01T00:00:00Z",
+                "url": "https://gitlab.com/test/repo/-/commit/abc123",
+                "author": {"name": "Test User", "email": "test@example.com"},
+            },
+            "action": "open",
         }
 
         mr = MergeRequestAttributes(**mr_data)
@@ -155,6 +198,7 @@ class TestMergeRequestAttributes:
     def test_mr_attributes_with_optional_fields(self):
         """Test merge request attributes with optional fields"""
         mr_data = {
+            "id": 2,
             "iid": 2,
             "title": "Full MR",
             "description": "Full merge request",
@@ -163,15 +207,42 @@ class TestMergeRequestAttributes:
             "state": "merged",
             "created_at": "2023-01-01T00:00:00Z",
             "updated_at": "2023-01-02T00:00:00Z",
+            "source_project_id": 1,
+            "target_project_id": 1,
             "author_id": 123,
             "assignee_id": 456,
-            "merge_status": "can_be_merged",
+            "url": "https://gitlab.com/test/repo/-/merge_requests/2",
+            "source": {
+                "name": "test-project",
+                "ssh_url": "git@gitlab.com:test/repo.git",
+                "http_url": "https://gitlab.com/test/repo.git",
+                "web_url": "https://gitlab.com/test/repo",
+                "visibility_level": 0,
+                "namespace": "test-namespace",
+            },
+            "target": {
+                "name": "test-project",
+                "ssh_url": "git@gitlab.com:test/repo.git",
+                "http_url": "https://gitlab.com/test/repo.git",
+                "web_url": "https://gitlab.com/test/repo",
+                "visibility_level": 0,
+                "namespace": "test-namespace",
+            },
+            "last_commit": {
+                "id": "def456",
+                "message": "Full feature commit",
+                "timestamp": "2023-01-02T00:00:00Z",
+                "url": "https://gitlab.com/test/repo/-/commit/def456",
+                "author": {"name": "Full User", "email": "full@example.com"},
+            },
+            "action": "merge",
         }
 
         mr = MergeRequestAttributes(**mr_data)
         assert mr.author_id == 123
         assert mr.assignee_id == 456
-        assert mr.merge_status == "can_be_merged"
+        assert mr.state == "merged"
+        assert mr.action == "merge"
 
     def test_mr_attributes_required_fields(self):
         """Test merge request attributes validation for required fields"""

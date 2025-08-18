@@ -14,16 +14,18 @@ from src.api.health import status
 class TestHealthStatus:
     """Test the main health status endpoint."""
 
-    @patch("src.api.health.settings")
+    @patch("src.api.health.get_settings")
     @patch("src.api.health.get_version")
     @pytest.mark.asyncio
-    async def test_status_endpoint(self, mock_get_version, mock_settings):
+    async def test_status_endpoint(self, mock_get_version, mock_get_settings):
         """Test status endpoint returns healthy."""
+        mock_settings = Mock()
         mock_settings.environment = "development"
         mock_settings.gitlab_url = "https://gitlab.example.com"
         mock_settings.ai_model = "openai:gpt-4o"
         mock_settings.gitlab_trigger_tag = "review"
         mock_settings.debug = False
+        mock_get_settings.return_value = mock_settings
         mock_get_version.return_value = "2.1.0"
 
         result = await status()
@@ -85,7 +87,7 @@ class TestReadinessCheck:
         mock_client.return_value = mock_client_instance
 
         # Mock AI model check
-        with patch("src.api.health.get_llm_model") as mock_get_model:
+        with patch("src.agents.providers.get_llm_model") as mock_get_model:
             mock_get_model.return_value = Mock()
 
             result = await readiness_check()
@@ -116,7 +118,7 @@ class TestReadinessCheck:
         mock_client.return_value = mock_client_instance
 
         # Mock AI model check
-        with patch("src.api.health.get_llm_model") as mock_get_model:
+        with patch("src.agents.providers.get_llm_model") as mock_get_model:
             mock_get_model.return_value = Mock()
 
             with pytest.raises(HTTPException) as exc_info:
@@ -289,7 +291,7 @@ class TestHealthEndpointIntegration:
         mock_client_instance.get = AsyncMock(return_value=mock_response)
         mock_client.return_value = mock_client_instance
 
-        with patch("src.api.health.get_llm_model") as mock_get_model:
+        with patch("src.agents.providers.get_llm_model") as mock_get_model:
             mock_get_model.return_value = Mock()
 
             response = client.get("/health/ready")

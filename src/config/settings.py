@@ -1,5 +1,5 @@
 """
-Application configuration management with secure secret handling
+Application configuration management
 """
 
 import os
@@ -7,8 +7,6 @@ from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
-
-from src.utils.secrets import get_secure_setting
 
 
 class Settings(BaseSettings):
@@ -32,32 +30,12 @@ class Settings(BaseSettings):
         default="https://gitlab.example.com" if os.getenv("TESTING") == "true" else "",
         min_length=1,
     )
-    gitlab_token_raw: str = Field(
+    gitlab_token: str = Field(
         default="glpat-test-token-1234567890" if os.getenv("TESTING") == "true" else "",
         min_length=1,
-        alias="gitlab_token",
     )
-    gitlab_webhook_secret_raw: Optional[str] = Field(
-        default=None, alias="gitlab_webhook_secret"
-    )
+    gitlab_webhook_secret: Optional[str] = Field(default=None)
     gitlab_trigger_tag: str = Field(default="ai-review")
-
-    @property
-    def gitlab_token(self) -> str:
-        """Securely retrieve GitLab token"""
-        result = get_secure_setting(
-            "gitlab_token", "GITLAB_TOKEN", self.gitlab_token_raw
-        )
-        return result or ""
-
-    @property
-    def gitlab_webhook_secret(self) -> Optional[str]:
-        """Securely retrieve GitLab webhook secret"""
-        return get_secure_setting(
-            "gitlab_webhook_secret",
-            "GITLAB_WEBHOOK_SECRET",
-            self.gitlab_webhook_secret_raw,
-        )
 
     @field_validator("gitlab_url")
     @classmethod
@@ -68,7 +46,7 @@ class Settings(BaseSettings):
         # Remove trailing slash for consistency
         return v.rstrip("/")
 
-    @field_validator("gitlab_token_raw")
+    @field_validator("gitlab_token")
     @classmethod
     def validate_gitlab_token(cls, v: str) -> str:
         """Validate GitLab token format"""
@@ -83,57 +61,32 @@ class Settings(BaseSettings):
     ai_retries: int = Field(default=3)
 
     # OpenAI Configuration
-    openai_api_key_raw: Optional[str] = Field(default=None, alias="openai_api_key")
+    openai_api_key: Optional[str] = Field(default=None)
     openai_model_name: str = Field(default="gpt-4o")
     openai_base_url: Optional[str] = Field(default=None)
 
     # Anthropic Configuration
-    anthropic_api_key_raw: Optional[str] = Field(
-        default=None, alias="anthropic_api_key"
-    )
+    anthropic_api_key: Optional[str] = Field(default=None)
     anthropic_model_name: str = Field(default="claude-3-5-sonnet-latest")
     anthropic_base_url: Optional[str] = Field(default=None)
 
     # Google Configuration
-    google_api_key_raw: Optional[str] = Field(default=None, alias="google_api_key")
+    google_api_key: Optional[str] = Field(default=None)
     gemini_model_name: str = Field(default="gemini-2.5-pro")
     google_base_url: Optional[str] = Field(default=None)
-
-    @property
-    def openai_api_key(self) -> Optional[str]:
-        """Securely retrieve OpenAI API key"""
-        return get_secure_setting(
-            "openai_api_key", "OPENAI_API_KEY", self.openai_api_key_raw
-        )
-
-    @property
-    def anthropic_api_key(self) -> Optional[str]:
-        """Securely retrieve Anthropic API key"""
-        return get_secure_setting(
-            "anthropic_api_key", "ANTHROPIC_API_KEY", self.anthropic_api_key_raw
-        )
-
-    @property
-    def google_api_key(self) -> Optional[str]:
-        """Securely retrieve Google API key"""
-        return get_secure_setting(
-            "google_api_key", "GOOGLE_API_KEY", self.google_api_key_raw
-        )
 
     # Security
     allowed_origins: List[str] = Field(
         default_factory=lambda: []  # Empty by default, requires explicit configuration
     )
-    api_key_raw: Optional[str] = Field(default=None, alias="api_key")
-
-    @property
-    def api_key(self) -> Optional[str]:
-        """Securely retrieve internal API key"""
-        return get_secure_setting("api_key", "API_KEY", self.api_key_raw)
+    api_key: Optional[str] = Field(default=None)
 
     # Rate limiting
     rate_limit_enabled: bool = Field(default=True)
     webhook_rate_limit: str = Field(default="10/minute")
+    global_rate_limit: str = Field(
+        default="100/minute"
+    )  # Global rate limit for all requests
 
     # Request limits
     max_request_size: int = Field(default=10 * 1024 * 1024)  # 10MB default
@@ -167,6 +120,7 @@ class Settings(BaseSettings):
 
     # Context7 Configuration
     context7_enabled: bool = Field(default=True)  # Enable Context7 MCP integration
+    context7_api_url: str = Field(default="http://context7:8080")  # Context7 API URL
     context7_max_tokens: int = Field(default=2000)  # Maximum tokens per request
     context7_cache_ttl: int = Field(default=3600)  # Cache TTL for documentation
 

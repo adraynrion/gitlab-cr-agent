@@ -572,6 +572,92 @@ def security_test_data():
 
 
 # ============================================================================
+# Review and Circuit Breaker Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def sample_review_result():
+    """Create a sample review result for testing."""
+    from src.models.review_models import ReviewResult
+
+    return ReviewResult(
+        overall_assessment="approve",
+        risk_level="low",
+        summary="Test review completed successfully",
+        issues=[],
+        positive_feedback=["Good code structure"],
+        metrics={"test": "true"},
+    )
+
+
+@pytest.fixture
+def sample_mr_details():
+    """Create sample merge request details."""
+    return {
+        "id": 123,
+        "iid": 10,
+        "title": "Test MR",
+        "description": "Test description",
+        "state": "opened",
+        "source_branch": "feature",
+        "target_branch": "main",
+    }
+
+
+@pytest.fixture
+def sample_mr_diff():
+    """Create sample merge request diff."""
+    return [
+        {
+            "old_path": "test.py",
+            "new_path": "test.py",
+            "new_file": False,
+            "renamed_file": False,
+            "deleted_file": False,
+            "diff": "@@ -1,3 +1,4 @@\n def test():\n-    pass\n+    print('hello')\n+    return True",
+        }
+    ]
+
+
+@pytest.fixture
+def sample_mr_event():
+    """Create sample merge request event."""
+    return {
+        "object_kind": "merge_request",
+        "event_type": "merge_request",
+        "user": {"id": 1, "name": "Test User"},
+        "project": {"id": 100, "name": "Test Project"},
+        "object_attributes": {
+            "id": 1,
+            "iid": 1,
+            "title": "Test MR",
+            "state": "opened",
+            "source_branch": "feature",
+            "target_branch": "main",
+        },
+    }
+
+
+@pytest.fixture
+def review_service(mock_review_agent):
+    """Create review service with mocked agent."""
+    from src.services.review_service import ReviewService
+
+    return ReviewService(review_agent=mock_review_agent)
+
+
+@pytest.fixture
+def mock_review_agent():
+    """Create mock review agent for testing."""
+    from unittest.mock import AsyncMock, Mock
+
+    agent = Mock()
+    agent.review_merge_request = AsyncMock()
+    return agent
+
+
+# ============================================================================
 # Cleanup Fixtures
 # ============================================================================
 

@@ -7,7 +7,6 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-# Circuit breaker import temporarily disabled due to compatibility issues
 from tenacity import (
     before_sleep_log,
     retry,
@@ -26,17 +25,17 @@ from src.exceptions import (
 )
 from src.models.gitlab_models import MergeRequestEvent
 from src.models.review_models import CodeIssue, ReviewContext, ReviewResult
+from src.utils.circuit_breaker import get_ai_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
 
 class ReviewService:
-    """Service for orchestrating AI code reviews with enhanced retry and rate limiting"""
+    """Service for orchestrating AI code reviews with circuit breaker and rate limiting"""
 
     def __init__(self, review_agent: Optional[CodeReviewAgent] = None):
         self.review_agent = review_agent or CodeReviewAgent()
-
-        # Circuit breaker for AI provider calls temporarily disabled due to compatibility issues
+        self.circuit_breaker = get_ai_circuit_breaker()
 
         # Rate limiter state
         self._last_ai_call = 0.0
@@ -78,10 +77,13 @@ class ReviewService:
             # Enforce rate limiting
             await self._enforce_rate_limit()
 
-            # Direct AI call (circuit breaker temporarily disabled)
-            result: ReviewResult = await self.review_agent.review_merge_request(
-                diff_content=diff_content, context=review_context
-            )
+            # Use circuit breaker to protect AI call
+            async def ai_call():
+                return await self.review_agent.review_merge_request(
+                    diff_content=diff_content, context=review_context
+                )
+
+            result: ReviewResult = await self.circuit_breaker.call(ai_call)
 
             logger.info(
                 "AI review completed successfully",
@@ -92,12 +94,30 @@ class ReviewService:
                     "issues_found": len(result.issues)
                     if hasattr(result, "issues")
                     else 0,
+                    "circuit_breaker_state": getattr(
+                        self.circuit_breaker, "state", "unknown"
+                    ),
                 },
             )
 
             return result
 
-        # Circuit breaker exception handling temporarily disabled
+        except AIProviderException as e:
+            # Circuit breaker is open
+            logger.error(
+                f"Circuit breaker open - AI provider unavailable: {e}",
+                extra={
+                    "correlation_id": get_correlation_id(),
+                    "request_id": get_request_id(),
+                    "operation": "circuit_breaker_open",
+                    "error_type": type(e).__name__,
+                    "circuit_breaker_state": getattr(
+                        self.circuit_breaker, "state", "unknown"
+                    ),
+                    "failure_count": self.circuit_breaker.failure_count,
+                },
+            )
+            raise
         except Exception as e:
             logger.error(
                 f"AI provider call failed: {e}",
@@ -106,6 +126,9 @@ class ReviewService:
                     "request_id": get_request_id(),
                     "operation": "ai_call_failed",
                     "error_type": type(e).__name__,
+                    "circuit_breaker_state": getattr(
+                        self.circuit_breaker, "state", "unknown"
+                    ),
                 },
             )
             raise
