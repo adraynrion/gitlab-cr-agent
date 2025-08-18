@@ -73,8 +73,8 @@ class TestNativeContext7MCP:
         except ImportError as e:
             pytest.skip(f"CodeReviewAgent not available: {e}")
 
-    def test_agent_with_context7_enabled_hardcoded_config(self):
-        """Test that agent uses hardcoded Context7 MCP configuration"""
+    def test_agent_with_context7_enabled_configurable_version(self):
+        """Test that agent uses configurable Context7 MCP version"""
         from unittest.mock import Mock, patch
 
         try:
@@ -90,6 +90,7 @@ class TestNativeContext7MCP:
                 settings.ai_model = "test:model"
                 settings.ai_retries = 3
                 settings.context7_enabled = True
+                settings.context7_mcp_version = "1.0.14"
                 mock_settings.return_value = settings
 
                 # Mock model and MCP server
@@ -100,7 +101,7 @@ class TestNativeContext7MCP:
                 try:
                     CodeReviewAgent()
 
-                    # Verify hardcoded MCP configuration is used
+                    # Verify configurable MCP version is used
                     mock_mcp_server.assert_called_once_with(
                         command="npx",
                         args=["-y", "@upstash/context7-mcp@1.0.14"],
