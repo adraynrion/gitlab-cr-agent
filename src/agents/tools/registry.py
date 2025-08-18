@@ -242,41 +242,15 @@ class ToolRegistry:
         """Configure registry from settings dictionary
 
         Args:
-            settings: Configuration dictionary
+            settings: Configuration dictionary (simplified for Context7-only)
         """
-        # Enable/disable tools based on settings
-        enabled_tools = settings.get("enabled_tools", [])
-        disabled_tools = settings.get("disabled_tools", [])
-
-        for tool_name in enabled_tools:
-            self.enable_tool(tool_name)
-
-        for tool_name in disabled_tools:
-            self.disable_tool(tool_name)
-
-        # Configure by category
-        enabled_categories = settings.get("enabled_categories", [])
-        disabled_categories = settings.get("disabled_categories", [])
-
-        for category_name in enabled_categories:
-            try:
-                category = ToolCategory(category_name)
-                for tool_name in self._categories[category]:
-                    self.enable_tool(tool_name)
-            except ValueError:
-                logger.warning(f"Invalid category in settings: {category_name}")
-
-        for category_name in disabled_categories:
-            try:
-                category = ToolCategory(category_name)
-                for tool_name in self._categories[category]:
-                    self.disable_tool(tool_name)
-            except ValueError:
-                logger.warning(f"Invalid category in settings: {category_name}")
+        # For Context7-only setup, configuration is simplified
+        # All registered tools are enabled by default
+        # Store Context7 configuration for tools to access
+        self._context7_settings = settings.get("context7", {})
 
         logger.info(
-            f"Registry configured: {len(self._enabled_tools)} tools enabled, "
-            f"{len(self._disabled_tools)} tools disabled"
+            f"Registry configured for Context7: {len(self._tools)} tools available"
         )
 
     async def execute_tools(

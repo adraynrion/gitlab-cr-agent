@@ -51,7 +51,7 @@ class TestSimpleAgent:
         settings = Mock()
         settings.ai_model = "test:model"
         settings.ai_retries = 3
-        settings.tools_enabled = False  # Disable tools to avoid complexity
+        settings.context7_enabled = False  # Disable Context7 to avoid complexity
         mock_get_settings.return_value = settings
 
         # Mock model

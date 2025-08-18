@@ -137,37 +137,34 @@ class CodeReviewAgent:
         logger.info(f"Initialized CodeReviewAgent with model: {self.model_name}")
 
     def _initialize_tools(self):
-        """Initialize the tool system with settings"""
+        """Initialize the Context7 system with settings"""
         settings = get_settings()
-        if settings.tools_enabled:
-            # Import tool modules to trigger registration
+        if settings.context7_enabled:
+            # Import Context7 tool module
             try:
-                # Import new unified Context7-based tools
+                # Import unified Context7-based tools
                 import src.agents.tools.unified_context7_tools  # noqa: F401
 
-                # Configure registry from settings
-                tool_settings = {
-                    "enabled_categories": settings.enabled_tool_categories,
-                    "disabled_categories": settings.disabled_tool_categories,
-                    "enabled_tools": settings.enabled_tools,
-                    "disabled_tools": settings.disabled_tools,
+                # Configure Context7 settings
+                context7_settings = {
                     "context7": {
                         "enabled": settings.context7_enabled,
                         "max_tokens": settings.context7_max_tokens,
                         "cache_ttl": settings.context7_cache_ttl,
+                        "api_url": settings.context7_api_url,
                     },
                 }
 
-                self.tool_registry.configure_from_settings(tool_settings)
+                self.tool_registry.configure_from_settings(context7_settings)
                 logger.info(
-                    f"Tool system initialized: {self.tool_registry.get_statistics()}"
+                    f"Context7 system initialized: {self.tool_registry.get_statistics()}"
                 )
 
             except ImportError as e:
-                logger.warning(f"Failed to import tool modules: {e}")
-                settings.tools_enabled = False
+                logger.warning(f"Failed to import Context7 modules: {e}")
+                settings.context7_enabled = False
         else:
-            logger.info("Tool system disabled in settings")
+            logger.info("Context7 system disabled in settings")
 
     def _register_pydantic_tools(self):
         """Register tools for PydanticAI that provide complete, unlimited access to tool results"""
@@ -496,8 +493,8 @@ Impact: The code review for affected libraries is based on the AI agent's traini
 
         # Execute tools first to gather evidence-based insights
         tool_results: List[Dict[str, Any]] = []
-        if settings.tools_enabled:
-            logger.info("Executing analysis tools...")
+        if settings.context7_enabled:
+            logger.info("Executing Context7 analysis...")
 
             # Create tool context
             tool_context = ToolContext(
@@ -513,19 +510,15 @@ Impact: The code review for affected libraries is based on the AI agent's traini
                         "enabled": settings.context7_enabled,
                         "max_tokens": settings.context7_max_tokens,
                         "cache_ttl": settings.context7_cache_ttl,
-                    },
-                    "tools": {
-                        "timeout": settings.tools_timeout,
-                        "cache_enabled": settings.tools_cache_enabled,
-                        "cache_ttl": settings.tools_cache_ttl,
+                        "api_url": settings.context7_api_url,
                     },
                 },
             )
 
             try:
-                # Execute all enabled tools
+                # Execute Context7 tools
                 raw_tool_results = await self.tool_registry.execute_tools(
-                    context=tool_context, parallel=settings.tools_parallel_execution
+                    context=tool_context, parallel=True  # Simple parallel execution
                 )
 
                 # Convert tool results to serializable format
