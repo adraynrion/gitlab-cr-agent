@@ -68,19 +68,22 @@ class TestSettings:
             assert settings.log_level == "WARNING"
 
     def test_settings_context7_configuration(self):
-        """Test settings with Context7 options enabled"""
+        """Test settings with Context7 MCP configuration (only ENABLED is configurable)"""
         with patch.dict(
             os.environ,
             {
                 "CONTEXT7_ENABLED": "true",
-                "CONTEXT7_MAX_TOKENS": "10000",
-                "CONTEXT7_CACHE_TTL": "7200",
             },
         ):
             settings = Settings()
             assert settings.context7_enabled is True
-            assert settings.context7_max_tokens == 10000
-            assert settings.context7_cache_ttl == 7200
+
+            # Other Context7 settings should not exist (hardcoded in agent)
+            assert not hasattr(settings, "context7_mcp_command")
+            assert not hasattr(settings, "context7_mcp_args")
+            assert not hasattr(settings, "context7_mcp_timeout")
+            assert not hasattr(settings, "context7_max_tokens")
+            assert not hasattr(settings, "context7_cache_ttl")
 
     def test_settings_rate_limiting_configuration(self):
         """Test settings with rate limiting configuration"""

@@ -111,11 +111,8 @@ class Settings(BaseSettings):
         default="httpx.HTTPStatusError,httpx.RequestError"
     )
 
-    # Context7 Configuration (Simplified Documentation Validation)
+    # Context7 MCP Configuration (Documentation Validation via Model Context Protocol)
     context7_enabled: bool = Field(default=True)  # Enable Context7 MCP integration
-    context7_api_url: str = Field(default="http://context7:8080")  # Context7 API URL
-    context7_max_tokens: int = Field(default=2000)  # Maximum tokens per request
-    context7_cache_ttl: int = Field(default=3600)  # Cache TTL for documentation
 
     @field_validator("allowed_origins")
     @classmethod
