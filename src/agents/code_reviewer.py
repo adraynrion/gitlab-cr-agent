@@ -218,6 +218,38 @@ class CodeReviewAgent:
                 # The output should be a ReviewResult from PydanticAI
                 return result.output  # type: ignore[return-value]
 
+        except FileNotFoundError as e:
+            # Handle MCP server startup failure (npx not found, etc.)
+            logger.warning(f"Context7 MCP server failed to start: {e}")
+            logger.info("Falling back to review without Context7 MCP integration")
+
+            # Create fallback agent without MCP toolsets
+            fallback_agent = Agent(
+                model=self.model,
+                output_type=ReviewResult,
+                deps_type=ReviewDependencies,
+                system_prompt=CODE_REVIEW_SYSTEM_PROMPT.replace(
+                    "You have access to Context7's comprehensive documentation database via MCP tools:",
+                    "Context7 MCP integration is unavailable. Review based on training knowledge:",
+                ).replace(
+                    "Use these Context7 MCP tools to:",
+                    "Without Context7 MCP, focus on:",
+                ),
+                retries=settings.ai_retries,
+            )
+
+            # Run fallback review
+            result = await fallback_agent.run(review_prompt, deps=deps)
+
+            # Log token usage for monitoring
+            if hasattr(result, "usage"):
+                usage = result.usage()
+                logger.info(
+                    f"Fallback review completed. Tokens used: {usage.total_tokens if hasattr(usage, 'total_tokens') else 'unknown'}"
+                )
+
+            return result.output  # type: ignore[return-value]
+
         except AIProviderException:
             # Don't wrap AI provider exceptions
             raise
