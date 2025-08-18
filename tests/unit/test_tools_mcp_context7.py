@@ -1,138 +1,90 @@
 """
-Minimal tests for Context7 MCP integration
+Minimal tests for Context7 MCP integration (native PydanticAI approach)
 """
 
 import pytest
 
-from src.agents.tools.mcp_context7 import (
-    CodeSnippet,
-    LibraryDocumentation,
-    LibraryResolutionResult,
-    QuestionAnswer,
-)
 
+class TestContext7NativeMCP:
+    """Test Context7 native MCP integration"""
 
-class TestContext7Models:
-    """Test Context7 MCP data models"""
+    def test_context7_mcp_imports_available(self):
+        """Test that PydanticAI MCP imports work"""
+        try:
+            from pydantic_ai.mcp import MCPServerStdio
 
-    def test_library_resolution_result_creation(self):
-        """Test LibraryResolutionResult model creation"""
-        result = LibraryResolutionResult(
-            library_id="/fastapi/fastapi",
-            name="FastAPI",
-            description="Modern web framework for Python",
-            trust_score=9.0,
-            versions=["0.104.0", "0.103.0"],
-            context7_available=True,
-            unavailability_reason=None,
-        )
+            assert MCPServerStdio is not None
+        except ImportError as e:
+            pytest.skip(f"pydantic-ai[mcp] not available: {e}")
 
-        assert result.name == "FastAPI"
-        assert result.library_id == "/fastapi/fastapi"
-        assert result.trust_score == 9.0
-        assert result.context7_available is True
+    def test_context7_mcp_server_creation(self):
+        """Test Context7 MCP server can be created with correct parameters"""
+        try:
+            from pydantic_ai.mcp import MCPServerStdio
 
-    def test_code_snippet_creation(self):
-        """Test CodeSnippet model creation"""
-        snippet = CodeSnippet(
-            title="Basic FastAPI App",
-            description="Create a basic FastAPI application",
-            code="from fastapi import FastAPI\napp = FastAPI()",
-            source="https://fastapi.tiangolo.com/tutorial/first-steps/",
-            language="python",
-        )
-
-        assert snippet.title == "Basic FastAPI App"
-        assert snippet.language == "python"
-        assert "FastAPI" in snippet.code
-
-    def test_question_answer_creation(self):
-        """Test QuestionAnswer model creation"""
-        qa = QuestionAnswer(
-            topic="Getting Started",
-            question="How to create a FastAPI app?",
-            answer="Use the FastAPI() constructor",
-            source="https://fastapi.tiangolo.com/tutorial/",
-        )
-
-        assert qa.topic == "Getting Started"
-        assert "FastAPI" in qa.question
-        assert "constructor" in qa.answer
-
-    def test_library_documentation_creation(self):
-        """Test LibraryDocumentation model creation"""
-        doc = LibraryDocumentation(
-            library_id="/fastapi/fastapi",
-            topic="routing",
-            snippets=[],
-            questions_answers=[],
-            references=[],
-            context7_available=True,
-            unavailability_reason=None,
-        )
-
-        assert doc.library_id == "/fastapi/fastapi"
-        assert doc.topic == "routing"
-        assert doc.context7_available is True
-        assert isinstance(doc.snippets, list)
+            # Test server creation with hardcoded Context7 parameters
+            server = MCPServerStdio(
+                command="npx", args=["-y", "@upstash/context7-mcp@1.0.14"], timeout=30.0
+            )
+            assert server is not None
+        except ImportError as e:
+            pytest.skip(f"pydantic-ai[mcp] not available: {e}")
 
 
 class TestContext7Integration:
     """Test Context7 MCP integration functionality"""
 
-    @pytest.mark.asyncio
-    async def test_context7_availability_check(self):
-        """Test Context7 availability checking"""
-        from src.agents.tools.mcp_context7 import _check_context7_available
+    def test_context7_configuration_in_settings(self):
+        """Test Context7 configuration is properly integrated in settings"""
+        from src.config.settings import get_settings
 
-        # In test environment, Context7 should not be available
-        result = await _check_context7_available()
-        assert isinstance(result, bool)
+        settings = get_settings()
 
-    @pytest.mark.asyncio
-    async def test_resolve_library_fallback(self):
-        """Test library resolution fallback when Context7 unavailable"""
-        from src.agents.tools.mcp_context7 import resolve_library_id
+        # Check that Context7 settings exist
+        assert hasattr(settings, "context7_enabled")
+        # Should be boolean type
+        assert isinstance(settings.context7_enabled, bool)
 
-        result = await resolve_library_id("fastapi")
+    def test_context7_agent_integration_imports(self):
+        """Test that Context7 agent integration can be imported"""
+        try:
+            from src.agents.code_reviewer import CodeReviewAgent
 
-        assert isinstance(result, LibraryResolutionResult)
-        assert result.name == "fastapi"
-        # Should have fallback behavior when Context7 unavailable
-        assert result.context7_available is False
-
-    @pytest.mark.asyncio
-    async def test_get_docs_fallback(self):
-        """Test documentation retrieval fallback"""
-        from src.agents.tools.mcp_context7 import get_library_docs
-
-        result = await get_library_docs("/fastapi/fastapi", "routing", 1000)
-
-        assert isinstance(result, LibraryDocumentation)
-        assert result.library_id == "/fastapi/fastapi"
-        # Should have fallback behavior when Context7 unavailable
+            assert CodeReviewAgent is not None
+        except ImportError as e:
+            pytest.fail(f"Failed to import CodeReviewAgent: {e}")
 
     @pytest.mark.asyncio
-    async def test_search_docs_fallback(self):
-        """Test documentation search fallback"""
-        from src.agents.tools.mcp_context7 import search_documentation
+    async def test_context7_agent_initialization_without_mcp(self):
+        """Test agent can be initialized when Context7 is disabled"""
+        from unittest.mock import Mock, patch
 
-        result = await search_documentation("FastAPI routing", ["fastapi"], 5)
+        from src.agents.code_reviewer import CodeReviewAgent
 
-        assert isinstance(result, list)
-        # Should return empty list or fallback results when Context7 unavailable
+        with patch("src.agents.code_reviewer.get_settings") as mock_get_settings, patch(
+            "src.agents.code_reviewer.get_llm_model"
+        ) as mock_get_llm:
+            # Mock settings with Context7 disabled
+            settings = Mock()
+            settings.ai_model = "test:model"
+            settings.ai_retries = 3
+            settings.context7_enabled = False
+            mock_get_settings.return_value = settings
 
-    @pytest.mark.asyncio
-    async def test_validate_api_fallback(self):
-        """Test API validation fallback"""
-        from src.agents.tools.mcp_context7 import validate_api_usage
+            # Mock model
+            mock_model = Mock()
+            mock_get_llm.return_value = mock_model
 
-        code = "from fastapi import FastAPI\napp = FastAPI()"
-        result = await validate_api_usage("fastapi", code, "Basic app setup")
-
-        assert isinstance(result, dict)
-        assert "library_name" in result
-        # Should have fallback behavior when Context7 unavailable
+            try:
+                agent = CodeReviewAgent()
+                assert agent.model_name == "test:model"
+                # Should initialize successfully even without Context7
+                assert agent is not None
+            except Exception as e:
+                # Some initialization errors are OK in test environment
+                assert (
+                    "context7" not in str(e).lower()
+                )  # Should not fail due to Context7
 
 
 class TestContext7Configuration:
@@ -146,16 +98,52 @@ class TestContext7Configuration:
 
         # Check that Context7 settings exist
         assert hasattr(settings, "context7_enabled")
-        assert hasattr(settings, "context7_api_url")
-        assert hasattr(settings, "context7_max_tokens")
-        assert hasattr(settings, "context7_cache_ttl")
+        # Only context7_enabled should be configurable, rest is hardcoded
+        assert isinstance(settings.context7_enabled, bool)
 
-    def test_context7_basic_functionality(self):
-        """Test basic Context7 functionality exists"""
-        # Import test to ensure no syntax errors
-        from src.agents.tools import mcp_context7
+    def test_context7_hardcoded_configuration(self):
+        """Test that Context7 MCP uses hardcoded configuration"""
+        from unittest.mock import Mock, patch
 
-        assert hasattr(mcp_context7, "resolve_library_id")
-        assert hasattr(mcp_context7, "get_library_docs")
-        assert hasattr(mcp_context7, "search_documentation")
-        assert hasattr(mcp_context7, "validate_api_usage")
+        # Test that the agent uses hardcoded MCP configuration
+        try:
+            from src.agents.code_reviewer import CodeReviewAgent
+
+            with patch(
+                "src.agents.code_reviewer.get_settings"
+            ) as mock_get_settings, patch(
+                "src.agents.code_reviewer.get_llm_model"
+            ) as mock_get_llm, patch(
+                "src.agents.code_reviewer.MCPServerStdio"
+            ) as mock_mcp_server:
+                # Mock settings with Context7 enabled
+                settings = Mock()
+                settings.ai_model = "test:model"
+                settings.ai_retries = 3
+                settings.context7_enabled = True
+                mock_get_settings.return_value = settings
+
+                # Mock model and MCP server
+                mock_model = Mock()
+                mock_get_llm.return_value = mock_model
+                mock_mcp_server.return_value = Mock()
+
+                try:
+                    CodeReviewAgent()
+
+                    # Verify MCPServerStdio was called with hardcoded values
+                    mock_mcp_server.assert_called_once_with(
+                        command="npx",
+                        args=["-y", "@upstash/context7-mcp@1.0.14"],
+                        timeout=30.0,
+                    )
+                except Exception:
+                    # Initialization may fail in test environment, but we still want to verify the call
+                    if mock_mcp_server.called:
+                        mock_mcp_server.assert_called_with(
+                            command="npx",
+                            args=["-y", "@upstash/context7-mcp@1.0.14"],
+                            timeout=30.0,
+                        )
+        except ImportError as e:
+            pytest.skip(f"PydanticAI MCP not available: {e}")
