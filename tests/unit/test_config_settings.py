@@ -68,15 +68,17 @@ class TestSettings:
             assert settings.log_level == "WARNING"
 
     def test_settings_context7_configuration(self):
-        """Test settings with Context7 MCP configuration (only ENABLED is configurable)"""
+        """Test settings with Context7 MCP configuration"""
         with patch.dict(
             os.environ,
             {
                 "CONTEXT7_ENABLED": "true",
+                "CONTEXT7_MCP_VERSION": "1.0.14",
             },
         ):
             settings = Settings()
             assert settings.context7_enabled is True
+            assert settings.context7_mcp_version == "1.0.14"
 
             # Other Context7 settings should not exist (hardcoded in agent)
             assert not hasattr(settings, "context7_mcp_command")
@@ -157,6 +159,7 @@ class TestSettings:
         assert hasattr(settings, "gitlab_url")
         assert hasattr(settings, "ai_model")
         assert hasattr(settings, "context7_enabled")
+        assert hasattr(settings, "context7_mcp_version")
         assert hasattr(settings, "environment")
         assert hasattr(settings, "port")
 

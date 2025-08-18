@@ -113,6 +113,7 @@ class Settings(BaseSettings):
 
     # Context7 MCP Configuration (Documentation Validation via Model Context Protocol)
     context7_enabled: bool = Field(default=True)  # Enable Context7 MCP integration
+    context7_mcp_version: str = Field(default="latest")  # Context7 MCP package version
 
     @field_validator("allowed_origins")
     @classmethod

@@ -101,11 +101,11 @@ class TestContext7Configuration:
         # Only context7_enabled should be configurable, rest is hardcoded
         assert isinstance(settings.context7_enabled, bool)
 
-    def test_context7_hardcoded_configuration(self):
-        """Test that Context7 MCP uses hardcoded configuration"""
+    def test_context7_configurable_version(self):
+        """Test that Context7 MCP uses configurable version"""
         from unittest.mock import Mock, patch
 
-        # Test that the agent uses hardcoded MCP configuration
+        # Test that the agent uses configurable MCP version
         try:
             from src.agents.code_reviewer import CodeReviewAgent
 
@@ -121,6 +121,7 @@ class TestContext7Configuration:
                 settings.ai_model = "test:model"
                 settings.ai_retries = 3
                 settings.context7_enabled = True
+                settings.context7_mcp_version = "1.0.14"
                 mock_get_settings.return_value = settings
 
                 # Mock model and MCP server

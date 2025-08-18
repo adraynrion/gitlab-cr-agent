@@ -83,6 +83,7 @@ class TestSimpleAgent:
         settings.ai_model = "test:model"
         settings.ai_retries = 3
         settings.context7_enabled = True
+        settings.context7_mcp_version = "latest"
         mock_get_settings.return_value = settings
 
         # Mock model and MCP server
@@ -94,9 +95,9 @@ class TestSimpleAgent:
             agent = CodeReviewAgent()
             assert agent.model_name == "test:model"
 
-            # Verify MCP server was created with hardcoded configuration
+            # Verify MCP server was created with configurable version
             mock_mcp_server.assert_called_once_with(
-                command="npx", args=["-y", "@upstash/context7-mcp@1.0.14"], timeout=30.0
+                command="npx", args=["-y", "@upstash/context7-mcp@latest"], timeout=30.0
             )
         except Exception:
             # Even if initialization fails, verify the MCP configuration was attempted
@@ -116,6 +117,7 @@ class TestMCPFallbackBehavior:
         settings.ai_model = "test:model"
         settings.ai_retries = 3
         settings.context7_enabled = True
+        settings.context7_mcp_version = "latest"
         return settings
 
     @pytest.fixture
@@ -181,7 +183,7 @@ class TestMCPFallbackBehavior:
 
             # Verify MCP server was configured
             mock_mcp_server.assert_called_once_with(
-                command="npx", args=["-y", "@upstash/context7-mcp@1.0.14"], timeout=30.0
+                command="npx", args=["-y", "@upstash/context7-mcp@latest"], timeout=30.0
             )
 
             # Verify agent was created with toolsets
