@@ -18,19 +18,16 @@ from src.agents.tools.registry import ToolRegistry, register_tool
 class MockTool(BaseTool):
     """Mock tool for testing"""
 
+    # Class attributes for metadata
+    name = "MockTool"
+    category = ToolCategory.CORRECTNESS
+    priority = ToolPriority.MEDIUM
+
     def __init__(self, name: str = "MockTool", should_fail: bool = False):
         super().__init__(name)
         self.should_fail = should_fail
         self.execute_called = False
         self.initialize_called = False
-
-    @property
-    def category(self) -> ToolCategory:
-        return ToolCategory.CORRECTNESS
-
-    @property
-    def priority(self) -> ToolPriority:
-        return ToolPriority.MEDIUM
 
     async def initialize(self, context: ToolContext) -> None:
         await super().initialize(context)
@@ -44,7 +41,7 @@ class MockTool(BaseTool):
 
         return ToolResult(
             tool_name=self.name,
-            category=self.category,
+            category=self.__class__.category,
             success=True,
             issues=[
                 {
@@ -201,8 +198,8 @@ class TestBaseTool:
         assert tool.requires_network is False
         assert tool.cacheable is True
         assert tool.timeout_seconds == 30
-        assert tool.category == ToolCategory.CORRECTNESS
-        assert tool.priority == ToolPriority.MEDIUM
+        assert tool.__class__.category == ToolCategory.CORRECTNESS
+        assert tool.__class__.priority == ToolPriority.MEDIUM
         assert (
             "Mock tool for testing" in tool.description
             or tool.description == "No description available"
@@ -327,10 +324,14 @@ class TestToolRegistry:
 
         # Register multiple tools
         class Tool1(MockTool):
+            name = "Tool1"
+
             def __init__(self):
                 super().__init__("Tool1")
 
         class Tool2(MockTool):
+            name = "Tool2"
+
             def __init__(self):
                 super().__init__("Tool2")
 
@@ -379,6 +380,8 @@ class TestToolRegistry:
         """Test tool execution with failures"""
 
         class FailingTool(MockTool):
+            name = "FailingTool"
+
             def __init__(self):
                 super().__init__("FailingTool", should_fail=True)
 
@@ -432,17 +435,13 @@ class TestRegisterDecorator:
 
         @register_tool(enabled=True, name="DecoratedTool")
         class DecoratedTool(BaseTool):
-            @property
-            def category(self) -> ToolCategory:
-                return ToolCategory.SECURITY
-
-            @property
-            def priority(self) -> ToolPriority:
-                return ToolPriority.HIGH
+            # Class attributes for metadata
+            category = ToolCategory.SECURITY
+            priority = ToolPriority.HIGH
 
             async def execute(self, context: ToolContext) -> ToolResult:
                 return ToolResult(
-                    tool_name=self.name, category=self.category, success=True
+                    tool_name=self.name, category=self.__class__.category, success=True
                 )
 
         # Tool should be automatically registered
@@ -452,8 +451,8 @@ class TestRegisterDecorator:
         assert registry.is_enabled("DecoratedTool")
 
         tool = decorated_tools[0]
-        assert tool.category == ToolCategory.SECURITY
-        assert tool.priority == ToolPriority.HIGH
+        assert tool.__class__.category == ToolCategory.SECURITY
+        assert tool.__class__.priority == ToolPriority.HIGH
 
     def test_decorator_with_defaults(self):
         """Test decorator with default settings"""
@@ -462,17 +461,13 @@ class TestRegisterDecorator:
 
         @register_tool()
         class DefaultTool(BaseTool):
-            @property
-            def category(self) -> ToolCategory:
-                return ToolCategory.PERFORMANCE
-
-            @property
-            def priority(self) -> ToolPriority:
-                return ToolPriority.LOW
+            # Class attributes for metadata
+            category = ToolCategory.PERFORMANCE
+            priority = ToolPriority.LOW
 
             async def execute(self, context: ToolContext) -> ToolResult:
                 return ToolResult(
-                    tool_name=self.name, category=self.category, success=True
+                    tool_name=self.name, category=self.__class__.category, success=True
                 )
 
         # Should be registered with default name
