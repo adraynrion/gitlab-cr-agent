@@ -106,10 +106,13 @@ class CodeReviewAgent:
         toolsets = []
         if settings.context7_enabled:
             try:
-                # Create Context7 MCP server with hardcoded configuration
+                # Create Context7 MCP server with configurable version
                 context7_server = MCPServerStdio(
                     command="npx",
-                    args=["-y", "@upstash/context7-mcp@1.0.14"],
+                    args=[
+                        "-y",
+                        f"@upstash/context7-mcp@{settings.context7_mcp_version}",
+                    ],
                     timeout=30.0,
                 )
                 toolsets.append(context7_server)
