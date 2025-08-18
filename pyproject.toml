@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gitlab-ai-reviewer"
-version = "3.5.0"
+version = "3.6.0"
 description = "AI-powered code review automation for GitLab using PydanticAI"
 authors = [
     {name = "Adraynrion", email = "adraynrion@pm.me"}
