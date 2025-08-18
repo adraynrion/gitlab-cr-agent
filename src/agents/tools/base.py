@@ -116,25 +116,22 @@ class ToolResult(BaseModel):
 class BaseTool(ABC):
     """Abstract base class for all review tools"""
 
+    # Class attributes for metadata (to be overridden by subclasses)
+    name: str = ""
+    category: ToolCategory
+    priority: ToolPriority
+    version: str = "1.0.0"
+
     def __init__(self, name: Optional[str] = None):
         """Initialize the tool
 
         Args:
-            name: Optional custom name for the tool
+            name: Optional custom name for the tool instance
         """
-        self.name = name or self.__class__.__name__
+        # Use instance name if provided, otherwise use class name attribute or class name
+        self.name = name or self.__class__.name or self.__class__.__name__
         self.logger = logging.getLogger(f"{__name__}.{self.name}")
         self._initialized = False
-
-    @property
-    @abstractmethod
-    def category(self) -> ToolCategory:
-        """Return the category of this tool"""
-
-    @property
-    @abstractmethod
-    def priority(self) -> ToolPriority:
-        """Return the priority of this tool"""
 
     @property
     def description(self) -> str:
@@ -213,7 +210,7 @@ class BaseTool(ABC):
             execution_time = int((time.time() - start_time) * 1000)
             result.execution_time_ms = max(1, execution_time)  # Ensure at least 1ms
             result.tool_name = self.name
-            result.category = self.category
+            result.category = self.__class__.category
 
             # Cache if applicable
             if self.cacheable and result.success:
@@ -229,7 +226,7 @@ class BaseTool(ABC):
 
             return ToolResult(
                 tool_name=self.name,
-                category=self.category,
+                category=self.__class__.category,
                 success=False,
                 error_message=str(e),
                 partial_result=True,
@@ -262,6 +259,6 @@ class BaseTool(ABC):
         return (
             f"<{self.__class__.__name__} "
             f"name='{self.name}' "
-            f"category={self.category.value} "
-            f"priority={self.priority.value}>"
+            f"category={self.__class__.category.value} "
+            f"priority={self.__class__.priority.value}>"
         )

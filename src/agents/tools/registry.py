@@ -51,16 +51,17 @@ class ToolRegistry:
             tool_class: The tool class to register
             enabled: Whether the tool should be enabled by default
         """
-        # Create a temporary instance to get metadata
-        temp_instance = tool_class()
-        tool_name = temp_instance.name
+        # Access metadata from class attributes without instantiation
+        tool_name = tool_class.name or tool_class.__name__
+        category = tool_class.category
+        priority = tool_class.priority
 
         # Register the tool class
         self._tools[tool_name] = tool_class
 
         # Update category and priority indices
-        self._categories[temp_instance.category].add(tool_name)
-        self._priorities[temp_instance.priority].add(tool_name)
+        self._categories[category].add(tool_name)
+        self._priorities[priority].add(tool_name)
 
         # Set enabled status
         if enabled:
@@ -70,8 +71,8 @@ class ToolRegistry:
 
         logger.debug(
             f"Registered tool: {tool_name} "
-            f"(category={temp_instance.category.value}, "
-            f"priority={temp_instance.priority.value}, "
+            f"(category={category.value}, "
+            f"priority={priority.value}, "
             f"enabled={enabled})"
         )
 
@@ -85,14 +86,15 @@ class ToolRegistry:
             logger.warning(f"Tool not found for unregistration: {tool_name}")
             return
 
-        # Get tool instance for metadata
+        # Get tool class for metadata access
         tool_class = self._tools[tool_name]
-        temp_instance = tool_class()
+        category = tool_class.category
+        priority = tool_class.priority
 
         # Remove from all indices
         del self._tools[tool_name]
-        self._categories[temp_instance.category].discard(tool_name)
-        self._priorities[temp_instance.priority].discard(tool_name)
+        self._categories[category].discard(tool_name)
+        self._priorities[priority].discard(tool_name)
         self._enabled_tools.discard(tool_name)
         self._disabled_tools.discard(tool_name)
 
@@ -331,7 +333,7 @@ class ToolRegistry:
                     # Create a failed ToolResult for the failed tool
                     failed_result = ToolResult(
                         tool_name=tool.name,
-                        category=tool.category,
+                        category=tool.__class__.category,
                         success=False,
                         error_message=str(e),
                         partial_result=True,

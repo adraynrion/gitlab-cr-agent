@@ -17,17 +17,14 @@ from src.agents.tools.registry import ToolRegistry, register_tool
 class MockRegistryTool(BaseTool):
     """Mock tool for registry testing"""
 
+    # Class attributes for metadata
+    name = "MockRegistryTool"
+    category = ToolCategory.CORRECTNESS
+    priority = ToolPriority.MEDIUM
+
     def __init__(self, name: str = "MockRegistryTool"):
         super().__init__(name)
         self.execute_called = False
-
-    @property
-    def category(self) -> ToolCategory:
-        return ToolCategory.CORRECTNESS
-
-    @property
-    def priority(self) -> ToolPriority:
-        return ToolPriority.MEDIUM
 
     @property
     def description(self) -> str:
@@ -37,7 +34,7 @@ class MockRegistryTool(BaseTool):
         self.execute_called = True
         return ToolResult(
             tool_name=self.name,
-            category=self.category,
+            category=self.__class__.category,
             success=True,
             issues=[],
             suggestions=["Test suggestion"],
@@ -201,13 +198,9 @@ class TestRegisterDecorator:
 
         @register_tool
         class DecoratedTool(BaseTool):
-            @property
-            def category(self) -> ToolCategory:
-                return ToolCategory.PERFORMANCE
-
-            @property
-            def priority(self) -> ToolPriority:
-                return ToolPriority.MEDIUM
+            # Class attributes for metadata
+            category = ToolCategory.PERFORMANCE
+            priority = ToolPriority.MEDIUM
 
             @property
             def description(self) -> str:
@@ -215,7 +208,7 @@ class TestRegisterDecorator:
 
             async def execute(self, context: ToolContext) -> ToolResult:
                 return ToolResult(
-                    tool_name=self.name, category=self.category, success=True
+                    tool_name=self.name, category=self.__class__.category, success=True
                 )
 
         registry = ToolRegistry()
@@ -229,13 +222,9 @@ class TestRegisterDecorator:
 
         @register_tool("CustomDecoratedTool")
         class AnotherDecoratedTool(BaseTool):
-            @property
-            def category(self) -> ToolCategory:
-                return ToolCategory.SECURITY
-
-            @property
-            def priority(self) -> ToolPriority:
-                return ToolPriority.MEDIUM
+            # Class attributes for metadata
+            category = ToolCategory.SECURITY
+            priority = ToolPriority.MEDIUM
 
             @property
             def description(self) -> str:
@@ -243,7 +232,7 @@ class TestRegisterDecorator:
 
             async def execute(self, context: ToolContext) -> ToolResult:
                 return ToolResult(
-                    tool_name=self.name, category=self.category, success=True
+                    tool_name=self.name, category=self.__class__.category, success=True
                 )
 
         registry = ToolRegistry()
@@ -257,13 +246,9 @@ class TestRegisterDecorator:
 
         @register_tool(enabled=False)
         class DisabledDecoratedTool(BaseTool):
-            @property
-            def category(self) -> ToolCategory:
-                return ToolCategory.MAINTAINABILITY
-
-            @property
-            def priority(self) -> ToolPriority:
-                return ToolPriority.MEDIUM
+            # Class attributes for metadata
+            category = ToolCategory.MAINTAINABILITY
+            priority = ToolPriority.MEDIUM
 
             @property
             def description(self) -> str:
@@ -271,7 +256,7 @@ class TestRegisterDecorator:
 
             async def execute(self, context: ToolContext) -> ToolResult:
                 return ToolResult(
-                    tool_name=self.name, category=self.category, success=True
+                    tool_name=self.name, category=self.__class__.category, success=True
                 )
 
         registry = ToolRegistry()
