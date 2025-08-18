@@ -4,7 +4,13 @@ Tests for src/agents/tools/registry.py
 
 from unittest.mock import Mock, patch
 
-from src.agents.tools.base import BaseTool, ToolCategory, ToolContext, ToolResult
+from src.agents.tools.base import (
+    BaseTool,
+    ToolCategory,
+    ToolContext,
+    ToolPriority,
+    ToolResult,
+)
 from src.agents.tools.registry import ToolRegistry, register_tool
 
 
@@ -20,16 +26,22 @@ class MockRegistryTool(BaseTool):
         return ToolCategory.CORRECTNESS
 
     @property
+    def priority(self) -> ToolPriority:
+        return ToolPriority.MEDIUM
+
+    @property
     def description(self) -> str:
         return "Mock tool for testing registry"
 
-    async def _execute(self, context: ToolContext) -> ToolResult:
+    async def execute(self, context: ToolContext) -> ToolResult:
         self.execute_called = True
         return ToolResult(
             tool_name=self.name,
+            category=self.category,
             success=True,
-            data={"test": "registry execution"},
-            metadata={},
+            issues=[],
+            suggestions=["Test suggestion"],
+            positive_findings=["Test passed"],
         )
 
 
@@ -45,39 +57,46 @@ class TestToolRegistry:
     def test_tool_registration(self):
         """Test tool registration"""
         registry = ToolRegistry()
-        tool = MockRegistryTool("TestTool")
+        MockRegistryTool("TestTool")
 
-        registry.register_tool(tool)
+        registry.register(MockRegistryTool, enabled=True)
 
         # Tool should be registered
-        assert "TestTool" in registry.get_tool_names()
-        assert registry.get_tool("TestTool") == tool
+        tool_names = [tool.name for tool in registry.get_all_tools()]
+        assert "MockRegistryTool" in tool_names
+
+        # Get the tool instance
+        retrieved_tool = registry.get_tool("MockRegistryTool")
+        assert retrieved_tool is not None
+        assert isinstance(retrieved_tool, MockRegistryTool)
 
     def test_tool_unregistration(self):
         """Test tool unregistration"""
         registry = ToolRegistry()
-        tool = MockRegistryTool("UnregisterTool")
+        MockRegistryTool("UnregisterTool")
 
         # Register then unregister
-        registry.register_tool(tool)
-        assert "UnregisterTool" in registry.get_tool_names()
+        registry.register(MockRegistryTool, enabled=True)
+        tool_names = [tool.name for tool in registry.get_all_tools()]
+        assert "MockRegistryTool" in tool_names
 
-        registry.unregister_tool("UnregisterTool")
-        assert "UnregisterTool" not in registry.get_tool_names()
+        registry.unregister("MockRegistryTool")
+        tool_names = [tool.name for tool in registry.get_all_tools()]
+        assert "MockRegistryTool" not in tool_names
 
     def test_tool_enabling_disabling(self):
         """Test tool enabling and disabling"""
         registry = ToolRegistry()
-        tool = MockRegistryTool("EnableDisableTool")
+        MockRegistryTool("EnableDisableTool")
 
-        registry.register_tool(tool)
+        registry.register(MockRegistryTool, enabled=True)
 
         # Test enabling/disabling
-        registry.disable_tool("EnableDisableTool")
-        assert not registry.is_tool_enabled("EnableDisableTool")
+        registry.disable_tool("MockRegistryTool")
+        assert not registry.is_enabled("MockRegistryTool")
 
-        registry.enable_tool("EnableDisableTool")
-        assert registry.is_tool_enabled("EnableDisableTool")
+        registry.enable_tool("MockRegistryTool")
+        assert registry.is_enabled("MockRegistryTool")
 
     def test_get_tool_names(self):
         """Test getting tool names"""
@@ -86,35 +105,28 @@ class TestToolRegistry:
         # Clear registry for clean test
         registry.clear_cache()
 
-        # Register some tools
-        tool1 = MockRegistryTool("Tool1")
-        tool2 = MockRegistryTool("Tool2")
+        # Register some tools (registry accepts classes, not instances)
+        registry.register(MockRegistryTool, enabled=True)
 
-        registry.register_tool(tool1)
-        registry.register_tool(tool2)
-
-        names = registry.get_tool_names()
-        assert "Tool1" in names
-        assert "Tool2" in names
+        names = [tool.name for tool in registry.get_all_tools()]
+        assert "MockRegistryTool" in names
 
     def test_get_tools_by_category(self):
         """Test getting tools by category"""
         registry = ToolRegistry()
-        tool = MockRegistryTool("CategoryTool")
 
-        registry.register_tool(tool)
+        registry.register(MockRegistryTool, enabled=True)
 
         correctness_tools = registry.get_tools_by_category(ToolCategory.CORRECTNESS)
         tool_names = [t.name for t in correctness_tools]
-        assert "CategoryTool" in tool_names
+        assert "MockRegistryTool" in tool_names
 
     def test_registry_statistics(self):
         """Test registry statistics"""
         registry = ToolRegistry()
 
         # Register a tool
-        tool = MockRegistryTool("StatsTool")
-        registry.register_tool(tool)
+        registry.register(MockRegistryTool, enabled=True)
 
         stats = registry.get_statistics()
 
@@ -138,30 +150,29 @@ class TestToolRegistry:
     async def test_tool_execution_through_registry(self):
         """Test tool execution through registry"""
         registry = ToolRegistry()
-        tool = MockRegistryTool("ExecutionTool")
 
-        registry.register_tool(tool)
+        registry.register(MockRegistryTool, enabled=True)
 
         context = ToolContext(
-            language="python",
-            file_path="test.py",
             diff_content="test diff",
-            merge_request_context={},
+            file_changes=[],
+            source_branch="feature",
+            target_branch="main",
+            repository_url="https://gitlab.example.com/test/repo",
         )
 
         # Execute tool through registry
-        retrieved_tool = registry.get_tool("ExecutionTool")
+        retrieved_tool = registry.get_tool("MockRegistryTool")
         result = await retrieved_tool.execute(context)
 
         assert result.success
-        assert tool.execute_called
+        assert retrieved_tool.execute_called
 
     def test_cache_clearing(self):
         """Test cache clearing functionality"""
         registry = ToolRegistry()
-        tool = MockRegistryTool("CacheTool")
 
-        registry.register_tool(tool)
+        registry.register(MockRegistryTool, enabled=True)
         registry.clear_cache()
 
         # Registry should still function after cache clear
@@ -170,6 +181,20 @@ class TestToolRegistry:
 
 class TestRegisterDecorator:
     """Test register_tool decorator"""
+
+    def setup_method(self):
+        """Clear registry before each test to avoid singleton interference"""
+        registry = ToolRegistry()
+        registry.clear_cache()
+        # Clear all registered tools to start fresh
+        registry._tools.clear()
+        registry._tool_instances.clear()
+        registry._enabled_tools.clear()
+        registry._disabled_tools.clear()
+        for category_set in registry._categories.values():
+            category_set.clear()
+        for priority_set in registry._priorities.values():
+            priority_set.clear()
 
     def test_decorator_registration(self):
         """Test tool registration via decorator"""
@@ -181,18 +206,23 @@ class TestRegisterDecorator:
                 return ToolCategory.PERFORMANCE
 
             @property
+            def priority(self) -> ToolPriority:
+                return ToolPriority.MEDIUM
+
+            @property
             def description(self) -> str:
                 return "Decorated tool"
 
-            async def _execute(self, context: ToolContext) -> ToolResult:
+            async def execute(self, context: ToolContext) -> ToolResult:
                 return ToolResult(
-                    tool_name=self.name, success=True, data={}, metadata={}
+                    tool_name=self.name, category=self.category, success=True
                 )
 
         registry = ToolRegistry()
 
         # Tool should be automatically registered
-        assert "DecoratedTool" in registry.get_tool_names()
+        tool_names = [tool.name for tool in registry.get_all_tools()]
+        assert "DecoratedTool" in tool_names
 
     def test_decorator_with_custom_name(self):
         """Test decorator with custom tool name"""
@@ -204,18 +234,23 @@ class TestRegisterDecorator:
                 return ToolCategory.SECURITY
 
             @property
+            def priority(self) -> ToolPriority:
+                return ToolPriority.MEDIUM
+
+            @property
             def description(self) -> str:
                 return "Custom named decorated tool"
 
-            async def _execute(self, context: ToolContext) -> ToolResult:
+            async def execute(self, context: ToolContext) -> ToolResult:
                 return ToolResult(
-                    tool_name=self.name, success=True, data={}, metadata={}
+                    tool_name=self.name, category=self.category, success=True
                 )
 
         registry = ToolRegistry()
 
         # Tool should be registered with custom name
-        assert "CustomDecoratedTool" in registry.get_tool_names()
+        tool_names = [tool.name for tool in registry.get_all_tools()]
+        assert "CustomDecoratedTool" in tool_names
 
     def test_decorator_with_defaults(self):
         """Test decorator with default parameters"""
@@ -227,19 +262,24 @@ class TestRegisterDecorator:
                 return ToolCategory.MAINTAINABILITY
 
             @property
+            def priority(self) -> ToolPriority:
+                return ToolPriority.MEDIUM
+
+            @property
             def description(self) -> str:
                 return "Disabled decorated tool"
 
-            async def _execute(self, context: ToolContext) -> ToolResult:
+            async def execute(self, context: ToolContext) -> ToolResult:
                 return ToolResult(
-                    tool_name=self.name, success=True, data={}, metadata={}
+                    tool_name=self.name, category=self.category, success=True
                 )
 
         registry = ToolRegistry()
 
         # Tool should be registered but disabled
-        assert "DisabledDecoratedTool" in registry.get_tool_names()
-        assert not registry.is_tool_enabled("DisabledDecoratedTool")
+        tool_names = [tool.name for tool in registry.get_all_tools()]
+        assert "DisabledDecoratedTool" in tool_names
+        assert not registry.is_enabled("DisabledDecoratedTool")
 
 
 class TestRegistryEdgeCases:
@@ -248,14 +288,12 @@ class TestRegistryEdgeCases:
     def test_duplicate_tool_registration(self):
         """Test handling of duplicate tool registrations"""
         registry = ToolRegistry()
-        tool1 = MockRegistryTool("DuplicateTool")
-        tool2 = MockRegistryTool("DuplicateTool")  # Same name
 
-        registry.register_tool(tool1)
+        registry.register(MockRegistryTool, enabled=True)
 
-        # Registering with same name should handle gracefully
+        # Registering the same class again should handle gracefully
         try:
-            registry.register_tool(tool2)
+            registry.register(MockRegistryTool, enabled=True)
             # Should either succeed or handle gracefully
             assert True
         except Exception:
@@ -283,7 +321,7 @@ class TestRegistryEdgeCases:
         registry = ToolRegistry()
         registry.clear_cache()
 
-        names = registry.get_tool_names()
+        names = [tool.name for tool in registry.get_all_tools()]
         assert isinstance(names, list)
 
         stats = registry.get_statistics()

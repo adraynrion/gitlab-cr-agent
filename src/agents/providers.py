@@ -4,7 +4,7 @@ Multi-LLM provider configuration for PydanticAI
 
 import logging
 import os
-from typing import Any, List, Optional, Union
+from typing import List, Optional, Union
 
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
@@ -50,12 +50,8 @@ def get_openai_model() -> OpenAIModel:
             return OpenAIModel(settings.openai_model_name, provider=provider)
 
         # Use default OpenAI client with just API key
-        if settings.openai_api_key:
-            provider = OpenAIProvider(api_key=api_key)
-            return OpenAIModel(settings.openai_model_name, provider=provider)
-
-        # Fall back to using environment variable through default provider
-        return OpenAIModel(settings.openai_model_name)
+        provider = OpenAIProvider(api_key=api_key)
+        return OpenAIModel(settings.openai_model_name, provider=provider)
     except Exception as e:
         logger.error(f"Failed to initialize OpenAI model: {e}")
         raise AIProviderException(
@@ -93,12 +89,8 @@ def get_anthropic_model() -> AnthropicModel:
             return AnthropicModel(settings.anthropic_model_name, provider=provider)
 
         # Use default Anthropic client with just API key
-        if settings.anthropic_api_key:
-            provider = AnthropicProvider(api_key=api_key)
-            return AnthropicModel(settings.anthropic_model_name, provider=provider)
-
-        # Fall back to using environment variable through default provider
-        return AnthropicModel(settings.anthropic_model_name)
+        provider = AnthropicProvider(api_key=api_key)
+        return AnthropicModel(settings.anthropic_model_name, provider=provider)
     except Exception as e:
         logger.error(f"Failed to initialize Anthropic model: {e}")
         raise AIProviderException(
@@ -173,14 +165,19 @@ def get_llm_model(model_name: Optional[str] = None) -> Union[Model, FallbackMode
 
     # Fallback configuration for multiple providers
     elif model_name == "fallback":
-        models: List[Union[Model, Any]] = []
+        models: List[str] = []
 
-        if settings.openai_api_key:
-            models.append(get_openai_model())
-        if settings.anthropic_api_key:
-            models.append(get_anthropic_model())
-        if settings.google_api_key:
-            models.append(get_google_model())
+        # Check available providers and add model strings, not Model objects
+        if settings.openai_api_key or os.getenv("OPENAI_API_KEY"):
+            models.append(f"openai:{settings.openai_model_name}")
+        if settings.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY"):
+            models.append(f"anthropic:{settings.anthropic_model_name}")
+        if (
+            settings.google_api_key
+            or os.getenv("GOOGLE_API_KEY")
+            or os.getenv("GEMINI_API_KEY")
+        ):
+            models.append(f"google-gla:{settings.gemini_model_name}")
 
         if not models:
             raise ConfigurationException(
@@ -189,7 +186,11 @@ def get_llm_model(model_name: Optional[str] = None) -> Union[Model, FallbackMode
                 details={"requested_model": model_name},
             )
 
-        return FallbackModel(models)
+        # FallbackModel expects a primary model and fallback models as strings
+        primary_model = models[0]
+        fallback_models = models[1:] if len(models) > 1 else []
+
+        return FallbackModel(primary_model, *fallback_models)
 
     else:
         logger.warning(f"Unknown model name '{model_name}', defaulting to OpenAI")

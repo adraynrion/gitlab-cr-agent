@@ -26,7 +26,7 @@ The test structure follows a clean architecture that mirrors the source code str
 | `test_tools_mcp_context7.py` | `src/agents/tools/mcp_context7.py` | Tests for Context7 MCP integration |
 | `test_tools_registry.py` | `src/agents/tools/registry.py` | Tests for tool registry system |
 | `test_tools_unified_context7.py` | `src/agents/tools/unified_context7_tools.py` | Tests for unified Context7 validation |
-| `test_utils_secrets.py` | `src/utils/secrets.py` | Tests for secret management |
+| `test_utils_circuit_breaker.py` | `src/utils/circuit_breaker.py` | Tests for async circuit breaker |
 | `test_utils_version.py` | `src/utils/version.py` | Tests for version utilities |
 
 ## Current Test Results

@@ -23,7 +23,8 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 
 ### Enterprise Security 🛡️
 - **Bearer Token Authentication**: Industry-standard Bearer token auth for all protected endpoints
-- **Rate Limiting**: Configurable per-IP rate limiting to prevent DoS attacks
+- **Global Rate Limiting**: Configurable global rate limiting optimized for single GitLab instance deployments
+- **Circuit Breaker Protection**: Async circuit breaker with automatic failure detection and recovery
 - **Request Validation**: Size limits and input sanitization to prevent memory exhaustion
 - **CORS Security**: Environment-specific origins with secure defaults
 - **Webhook Authentication**: Secure webhook verification with shared secrets
@@ -32,7 +33,8 @@ An **enterprise-grade**, AI-powered code review agent that integrates seamlessly
 ### Production Ready 🚀
 - **Graceful Shutdown**: Proper signal handling and resource cleanup
 - **Health Checks**: Comprehensive liveness and readiness probes
-- **Error Recovery**: Exponential backoff retry mechanisms for all external APIs
+- **Error Recovery**: Exponential backoff retry mechanisms with async circuit breaker protection
+- **Circuit Breaker**: Automatic failover and recovery for AI provider resilience
 - **Structured Logging**: JSON logging with correlation IDs and error context
 - **Dependency Injection**: Clean architecture with testable components
 - **Exception Hierarchy**: Standardized error handling and monitoring
@@ -71,7 +73,7 @@ src/
 ├── config/
 │   └── settings.py            # Environment-based configuration with validation
 └── utils/
-    └── secrets.py             # Secure secret management for sensitive configuration
+    └── circuit_breaker.py     # Async circuit breaker for AI provider resilience
 ```
 
 ## 🚀 Quick Start
@@ -163,12 +165,29 @@ src/
 | Variable | Description | Default | Example |
 |----------|-------------|---------|----------|
 | `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated) | Environment dependent | `https://gitlab.company.com` |
-| `RATE_LIMIT_ENABLED` | Enable rate limiting | `true` | `false` |
-| `WEBHOOK_RATE_LIMIT` | Webhook rate limit | `10/minute` | `20/minute` |
+| `RATE_LIMIT_ENABLED` | Enable global rate limiting | `true` | `false` |
+| `GLOBAL_RATE_LIMIT` | Global rate limit for all requests | `100/minute` | `50/minute` |
+| `WEBHOOK_RATE_LIMIT` | Webhook-specific rate limit | `10/minute` | `20/minute` |
 | `MAX_REQUEST_SIZE` | Maximum request size in bytes | `10485760` (10MB) | `5242880` (5MB) |
 | `API_KEY` | Bearer token for API authentication | No | `your-secret-api-key` |
 | `ENVIRONMENT` | Deployment environment | `development` | `production` |
 | `LOG_LEVEL` | Logging level | `INFO` | `DEBUG` |
+
+### Circuit Breaker Configuration
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|----------|
+| `CIRCUIT_BREAKER_FAILURE_THRESHOLD` | Failures before opening circuit | `5` | `3` |
+| `CIRCUIT_BREAKER_TIMEOUT` | Recovery timeout in seconds | `60` | `30` |
+
+### Context7 MCP Integration
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|----------|
+| `CONTEXT7_ENABLED` | Enable Context7 documentation validation | `true` | `false` |
+| `CONTEXT7_API_URL` | Context7 service URL | `http://context7:8080` | `http://localhost:8080` |
+| `CONTEXT7_MAX_TOKENS` | Maximum tokens for validation requests | `2000` | `5000` |
+| `CONTEXT7_CACHE_TTL` | Cache TTL in seconds | `3600` | `1800` |
 
 ### AI Model Options
 
@@ -307,12 +326,19 @@ Function parameters lack type annotations
 ### Docker
 
 ```bash
-# Build image
-docker compose build
+# Build and run with Context7 MCP integration
+docker compose up --build -d
 
-# Run container
-docker compose up -d
+# Run without Context7 (standalone mode)
+docker build -t gitlab-ai-reviewer .
+docker run -d -p 8000:8000 --env-file .env gitlab-ai-reviewer
 ```
+
+### Docker Services
+
+The Docker Compose setup includes:
+- **gitlab-ai-reviewer**: Main application service
+- **context7**: Context7 MCP service for documentation validation (exposed on port 8080)
 
 ## 🧪 Testing
 
@@ -622,7 +648,8 @@ This application implements **enterprise-grade security** measures:
 
 - **Bearer Token Authentication**: Industry-standard Bearer token authentication for all protected endpoints
 - **Input Validation**: All requests validated with size limits and sanitization
-- **Rate Limiting**: Configurable per-IP rate limiting with slowapi
+- **Global Rate Limiting**: Configurable global rate limiting optimized for single GitLab instance
+- **Circuit Breaker Protection**: Async circuit breaker prevents cascade failures from AI providers
 - **Security Headers**: CSRF, XSS, clickjacking protection via secure middleware
 - **CORS Security**: Environment-specific origin restrictions with Authorization header support
 - **Webhook Authentication**: Secure webhook verification with shared secrets
@@ -637,10 +664,19 @@ This application implements **enterprise-grade security** measures:
 export ENVIRONMENT=production
 export ALLOWED_ORIGINS="https://your-gitlab.com"
 export RATE_LIMIT_ENABLED=true
+export GLOBAL_RATE_LIMIT="100/minute"
 export WEBHOOK_RATE_LIMIT="10/minute"
 export MAX_REQUEST_SIZE=5242880  # 5MB
 export GITLAB_WEBHOOK_SECRET="your-webhook-secret"
 export API_KEY="your-api-key"
+
+# Circuit breaker settings
+export CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+export CIRCUIT_BREAKER_TIMEOUT=60
+
+# Context7 MCP settings
+export CONTEXT7_ENABLED=true
+export CONTEXT7_API_URL="http://context7:8080"
 ```
 
 ### Monitoring Endpoints

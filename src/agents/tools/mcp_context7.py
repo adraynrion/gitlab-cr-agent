@@ -1,14 +1,17 @@
 """
 Context7 MCP tools implementation for PydanticAI agent
 
-These tools integrate Context7 MCP functionality directly into the PydanticAI agent,
+These tools integrate Context7 MCP functionality via HTTP API calls,
 making Context7's documentation database available as agent tools.
 """
 
 import logging
 from typing import Any, Dict, List, Optional
 
+import httpx
 from pydantic import BaseModel, Field
+
+from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -73,18 +76,23 @@ class LibraryDocumentation(BaseModel):
     )
 
 
-def _check_mcp_available() -> bool:
-    """Check if Context7 MCP functions are available"""
+async def _check_context7_available() -> bool:
+    """Check if Context7 API is available"""
     try:
-        # Check if the MCP function exists in the global namespace
-        import builtins
+        settings = get_settings()
+        if not settings.context7_enabled:
+            return False
 
-        return hasattr(builtins, "mcp__context7__resolve_library_id")
-    except Exception:
+        # Simple health check to Context7 API
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{settings.context7_api_url}/health")
+            return response.status_code == 200
+    except Exception as e:
+        logger.warning(f"Context7 API health check failed: {e}")
         return False
 
 
-def resolve_library_id(library_name: str) -> LibraryResolutionResult:
+async def resolve_library_id(library_name: str) -> LibraryResolutionResult:
     """
     Resolve a library name to Context7-compatible library ID.
 
@@ -98,9 +106,9 @@ def resolve_library_id(library_name: str) -> LibraryResolutionResult:
         LibraryResolutionResult with availability status and library information
     """
     try:
-        # Check if MCP functions are available
-        if not _check_mcp_available():
-            logger.warning(f"Context7 MCP not available for resolving {library_name}")
+        # Check if Context7 API is available
+        if not await _check_context7_available():
+            logger.warning(f"Context7 API not available for resolving {library_name}")
             return LibraryResolutionResult(
                 library_id=None,
                 name=library_name,
@@ -108,28 +116,33 @@ def resolve_library_id(library_name: str) -> LibraryResolutionResult:
                 trust_score=None,
                 versions=[],
                 context7_available=False,
-                unavailability_reason="Context7 MCP functions not available in runtime environment",
+                unavailability_reason="Context7 API not available or disabled",
             )
 
-        # Call the actual Context7 MCP function
-        import builtins
-
-        resolve_func = getattr(builtins, "mcp__context7__resolve_library_id", None)
-        if not resolve_func:
-            logger.warning(
-                f"Context7 MCP resolve function not found for {library_name}"
-            )
-            return LibraryResolutionResult(
-                library_id=None,
-                name=library_name,
-                description=None,
-                trust_score=None,
-                versions=[],
-                context7_available=False,
-                unavailability_reason="Context7 MCP resolve function not accessible",
+        # Call the Context7 API
+        settings = get_settings()
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{settings.context7_api_url}/api/resolve-library-id",
+                json={"libraryName": library_name},
+                headers={"Content-Type": "application/json"},
             )
 
-        result = resolve_func(libraryName=library_name)
+            if response.status_code != 200:
+                logger.warning(
+                    f"Context7 API error for {library_name}: {response.status_code}"
+                )
+                return LibraryResolutionResult(
+                    library_id=None,
+                    name=library_name,
+                    description=None,
+                    trust_score=None,
+                    versions=[],
+                    context7_available=False,
+                    unavailability_reason=f"Context7 API error: {response.status_code}",
+                )
+
+            result = response.text
 
         # Parse the result to extract the best match
         if result and "Context7-compatible library ID:" in result:
@@ -206,7 +219,7 @@ def resolve_library_id(library_name: str) -> LibraryResolutionResult:
         )
 
 
-def get_library_docs(
+async def get_library_docs(
     context7_library_id: str, topic: Optional[str] = None, max_tokens: int = 2000
 ) -> LibraryDocumentation:
     """
@@ -224,10 +237,10 @@ def get_library_docs(
         LibraryDocumentation with availability status and documentation content
     """
     try:
-        # Check if MCP functions are available
-        if not _check_mcp_available():
+        # Check if Context7 API is available
+        if not await _check_context7_available():
             logger.warning(
-                f"Context7 MCP not available for getting docs for {context7_library_id}"
+                f"Context7 API not available for getting docs for {context7_library_id}"
             )
             return LibraryDocumentation(
                 library_id=context7_library_id,
@@ -236,32 +249,40 @@ def get_library_docs(
                 questions_answers=[],
                 references=[],
                 context7_available=False,
-                unavailability_reason="Context7 MCP functions not available in runtime environment",
+                unavailability_reason="Context7 API not available or disabled",
             )
 
-        # Call the actual Context7 MCP function
-        import builtins
+        # Call the Context7 API
+        settings = get_settings()
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            payload = {
+                "context7CompatibleLibraryID": context7_library_id,
+                "tokens": max_tokens,
+            }
+            if topic:
+                payload["topic"] = topic
 
-        get_docs_func = getattr(builtins, "mcp__context7__get_library_docs", None)
-        if not get_docs_func:
-            logger.warning(
-                f"Context7 MCP get_docs function not found for {context7_library_id}"
-            )
-            return LibraryDocumentation(
-                library_id=context7_library_id,
-                topic=topic,
-                snippets=[],
-                questions_answers=[],
-                references=[],
-                context7_available=False,
-                unavailability_reason="Context7 MCP get_docs function not accessible",
+            response = await client.post(
+                f"{settings.context7_api_url}/api/get-library-docs",
+                json=payload,
+                headers={"Content-Type": "application/json"},
             )
 
-        result = get_docs_func(
-            context7CompatibleLibraryID=context7_library_id,
-            topic=topic,
-            tokens=max_tokens,
-        )
+            if response.status_code != 200:
+                logger.warning(
+                    f"Context7 API error for {context7_library_id}: {response.status_code}"
+                )
+                return LibraryDocumentation(
+                    library_id=context7_library_id,
+                    topic=topic,
+                    snippets=[],
+                    questions_answers=[],
+                    references=[],
+                    context7_available=False,
+                    unavailability_reason=f"Context7 API error: {response.status_code}",
+                )
+
+            result = response.text
 
         # Parse the result into structured format
         docs = LibraryDocumentation(
@@ -394,7 +415,7 @@ def _parse_question_answer(qa_text: str) -> Optional[QuestionAnswer]:
     return None
 
 
-def search_documentation(
+async def search_documentation(
     query: str, libraries: Optional[List[str]] = None, max_results: int = 5
 ) -> List[Dict[str, Any]]:
     """
@@ -415,9 +436,9 @@ def search_documentation(
 
     # Return empty results if no libraries specified and Context7 is unavailable
     if not libraries:
-        if not _check_mcp_available():
+        if not await _check_context7_available():
             logger.warning(
-                "Context7 MCP not available and no specific libraries provided for search"
+                "Context7 API not available and no specific libraries provided for search"
             )
             return []
         else:
@@ -429,7 +450,7 @@ def search_documentation(
     for library_name in libraries[:max_results]:
         try:
             # Resolve library ID
-            resolution = resolve_library_id(library_name)
+            resolution = await resolve_library_id(library_name)
 
             # Track Context7 availability for this library
             context7_available = resolution.context7_available
@@ -453,7 +474,9 @@ def search_documentation(
                 continue
 
             # Get documentation for the query topic
-            docs = get_library_docs(resolution.library_id, topic=query, max_tokens=1000)
+            docs = await get_library_docs(
+                resolution.library_id, topic=query, max_tokens=1000
+            )
 
             result_entry = {
                 "library": library_name,
@@ -503,7 +526,7 @@ def search_documentation(
     return results[:max_results]
 
 
-def validate_api_usage(
+async def validate_api_usage(
     library_name: str, code_snippet: str, context: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -522,7 +545,7 @@ def validate_api_usage(
     """
     try:
         # Resolve library ID
-        resolution = resolve_library_id(library_name)
+        resolution = await resolve_library_id(library_name)
 
         if not resolution.context7_available:
             logger.warning(f"Context7 MCP not available for validating {library_name}")
@@ -549,7 +572,9 @@ def validate_api_usage(
             }
 
         # Get documentation
-        docs = get_library_docs(resolution.library_id, topic=context, max_tokens=3000)
+        docs = await get_library_docs(
+            resolution.library_id, topic=context, max_tokens=3000
+        )
 
         if not docs.context7_available:
             logger.warning(

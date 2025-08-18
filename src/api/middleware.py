@@ -11,7 +11,6 @@ from typing import Callable, Optional
 import secure
 from fastapi import HTTPException, Request, Response
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -28,12 +27,18 @@ request_id_context: ContextVar[Optional[str]] = ContextVar("request_id", default
 
 def get_correlation_id() -> Optional[str]:
     """Get the current correlation ID from context"""
-    return correlation_id_context.get()
+    try:
+        return correlation_id_context.get()
+    except LookupError:
+        return None
 
 
 def get_request_id() -> Optional[str]:
     """Get the current request ID from context"""
-    return request_id_context.get()
+    try:
+        return request_id_context.get()
+    except LookupError:
+        return None
 
 
 def set_correlation_id(correlation_id: str) -> None:
@@ -46,9 +51,19 @@ def set_request_id(request_id: str) -> None:
     request_id_context.set(request_id)
 
 
-# Create rate limiter instance
+# Create rate limiter instance with global rate limit
+def get_global_rate_limit():
+    """Get global rate limit from settings"""
+    settings = get_settings()
+    if settings.rate_limit_enabled and settings.global_rate_limit:
+        return [settings.global_rate_limit]
+    return []
+
+
 limiter = Limiter(
-    key_func=get_remote_address, enabled=get_settings().rate_limit_enabled
+    key_func=lambda _: "global",  # Use a constant key for global rate limiting
+    enabled=get_settings().rate_limit_enabled,
+    default_limits=get_global_rate_limit(),
 )
 
 # Security headers configuration

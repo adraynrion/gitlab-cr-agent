@@ -288,7 +288,7 @@ class CodeReviewAgent:
             ctx: RunContext[ReviewDependencies], library_name: str
         ) -> LibraryResolutionResult:
             """Resolve a library name to get its Context7 library ID and metadata"""
-            return resolve_library_id(library_name)
+            return await resolve_library_id(library_name)
 
         @self.agent.tool
         async def get_documentation(
@@ -298,7 +298,7 @@ class CodeReviewAgent:
             max_tokens: int = 2000,
         ) -> LibraryDocumentation:
             """Get up-to-date documentation for a library from Context7"""
-            return get_library_docs(context7_library_id, topic, max_tokens)
+            return await get_library_docs(context7_library_id, topic, max_tokens)
 
         @self.agent.tool
         async def search_library_docs(
@@ -308,7 +308,7 @@ class CodeReviewAgent:
             max_results: int = 5,
         ) -> List[Dict[str, Any]]:
             """Search for documentation across multiple libraries"""
-            return search_documentation(query, libraries, max_results)
+            return await search_documentation(query, libraries, max_results)
 
         @self.agent.tool
         async def validate_code_against_docs(
@@ -318,7 +318,7 @@ class CodeReviewAgent:
             context: Optional[str] = None,
         ) -> Dict[str, Any]:
             """Validate API usage against official documentation"""
-            return validate_api_usage(library_name, code_snippet, context)
+            return await validate_api_usage(library_name, code_snippet, context)
 
         @self.agent.tool
         async def get_metrics_summary(

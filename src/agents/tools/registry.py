@@ -405,33 +405,62 @@ class ToolRegistry:
 
 
 # Decorator for automatic tool registration
-def register_tool(enabled: bool = True, name: Optional[str] = None):
+def register_tool(
+    enabled_or_name=True, enabled: bool = True, name: Optional[str] = None
+):
     """Decorator to automatically register a tool class
 
     Args:
-        enabled: Whether the tool should be enabled by default
+        enabled_or_name: Can be bool (enabled) or str (name) for flexible usage
+        enabled: Whether the tool should be enabled by default (when using named params)
         name: Optional custom name for the tool
 
     Usage:
+        @register_tool
         @register_tool(enabled=True)
+        @register_tool("CustomName")
+        @register_tool(name="CustomName", enabled=False)
         class MyTool(BaseTool):
             ...
     """
 
+    # Handle different calling patterns
+    if callable(enabled_or_name):
+        # Called as @register_tool (without parentheses)
+        # In this case, enabled_or_name is actually the class
+        cls = enabled_or_name
+        registry = ToolRegistry()
+        registry.register(cls, enabled=True)
+        return cls
+    elif isinstance(enabled_or_name, str):
+        # Called as @register_tool("CustomName")
+        actual_name = enabled_or_name
+        actual_enabled = enabled  # Use default or passed enabled value
+    elif isinstance(enabled_or_name, bool) and enabled_or_name is False:
+        # Called as @register_tool(False) - explicit boolean
+        actual_enabled = enabled_or_name
+        actual_name = name or ""
+    else:
+        # Default case - @register_tool() or @register_tool(enabled=X, name=Y)
+        # For @register_tool(enabled=False), enabled_or_name is True (default)
+        # but the 'enabled' keyword parameter is False
+        actual_enabled = enabled
+        actual_name = name or ""
+
     def decorator(cls: Type[BaseTool]) -> Type[BaseTool]:
         # Set custom name if provided
-        if name:
+        if actual_name:
             original_init = cls.__init__
 
             def new_init(self, *args, **kwargs):
-                original_init(self, name=name, *args, **kwargs)
+                original_init(self, name=actual_name, *args, **kwargs)
 
             # Use setattr to avoid method assignment type error
             setattr(cls, "__init__", new_init)
 
         # Register the tool
         registry = ToolRegistry()
-        registry.register(cls, enabled=enabled)
+        registry.register(cls, enabled=actual_enabled)
 
         return cls
 
