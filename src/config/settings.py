@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     gemini_model_name: str = Field(default="gemini-2.5-pro")
     google_base_url: Optional[str] = Field(default=None)
 
+    # LLM Base URL Parameters (applied to all providers that support custom base URLs)
+    llm_base_url_params: Optional[str] = Field(default=None)
+
     # Security
     allowed_origins: List[str] = Field(
         default_factory=lambda: []  # Empty by default, requires explicit configuration

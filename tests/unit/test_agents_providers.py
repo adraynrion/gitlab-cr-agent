@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from src.agents.providers import (
+    _append_url_params,
     get_anthropic_model,
     get_google_model,
     get_llm_model,
@@ -365,3 +366,235 @@ class TestProviderIntegration:
         assert openai_model != anthropic_model
         assert anthropic_model != google_model
         assert openai_model != google_model
+
+
+class TestURLParameterUtility:
+    """Test the URL parameter utility function"""
+
+    def test_append_url_params_to_base_url_without_query(self):
+        """Test appending parameters to URL without existing query parameters"""
+        result = _append_url_params(
+            "https://api.example.com/v1", "key=value&version=2024"
+        )
+        assert result == "https://api.example.com/v1?key=value&version=2024"
+
+    def test_append_url_params_to_base_url_with_existing_query(self):
+        """Test appending parameters to URL with existing query parameters"""
+        result = _append_url_params(
+            "https://api.example.com/v1?existing=param", "key=value&version=2024"
+        )
+        assert (
+            result == "https://api.example.com/v1?existing=param&key=value&version=2024"
+        )
+
+    def test_append_url_params_with_override(self):
+        """Test that new parameters override existing ones with same key"""
+        result = _append_url_params(
+            "https://api.example.com/v1?key=old", "key=new&version=2024"
+        )
+        assert result == "https://api.example.com/v1?key=new&version=2024"
+
+    def test_append_url_params_with_empty_params(self):
+        """Test appending empty parameters string"""
+        base_url = "https://api.example.com/v1"
+        result = _append_url_params(base_url, "")
+        assert result == base_url
+
+    def test_append_url_params_with_none_params(self):
+        """Test appending None parameters"""
+        base_url = "https://api.example.com/v1"
+        result = _append_url_params(base_url, None)
+        assert result == base_url
+
+    def test_append_url_params_with_whitespace_params(self):
+        """Test appending whitespace-only parameters"""
+        base_url = "https://api.example.com/v1"
+        result = _append_url_params(base_url, "   ")
+        assert result == base_url
+
+    def test_append_url_params_with_complex_url(self):
+        """Test with complex URL including path, query, and fragment"""
+        base_url = "https://api.example.com/v1/endpoint?existing=param#fragment"
+        result = _append_url_params(base_url, "key=value")
+        assert (
+            result
+            == "https://api.example.com/v1/endpoint?existing=param&key=value#fragment"
+        )
+
+    def test_append_url_params_url_encoding(self):
+        """Test that parameters are properly URL encoded"""
+        result = _append_url_params(
+            "https://api.example.com/v1", "key=value with spaces&special=!@#$"
+        )
+        # Parameters should be properly encoded and sorted
+        assert (
+            "key=value+with+spaces" in result or "key=value%20with%20spaces" in result
+        )
+        assert "special" in result
+
+    def test_append_url_params_sorted_output(self):
+        """Test that parameters are sorted in the output"""
+        result = _append_url_params(
+            "https://api.example.com/v1", "zebra=last&alpha=first"
+        )
+        # Parameters should be sorted alphabetically
+        assert result == "https://api.example.com/v1?alpha=first&zebra=last"
+
+
+class TestURLParameterIntegration:
+    """Test URL parameter integration with provider functions"""
+
+    @patch("src.agents.providers.get_settings")
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"})
+    def test_openai_model_with_url_params(self, mock_get_settings):
+        """Test OpenAI model creation with URL parameters"""
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "openai_api_key": "test-key",
+                "openai_model_name": "gpt-4o",
+                "openai_base_url": "https://api.example.com/v1",
+                "llm_base_url_params": "api_version=2024-01&custom=value",
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
+        model = get_openai_model()
+        assert model is not None
+
+    @patch("src.agents.providers.get_settings")
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_anthropic_model_with_url_params(self, mock_get_settings):
+        """Test Anthropic model creation with URL parameters"""
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "anthropic_api_key": "test-key",
+                "anthropic_model_name": "claude-3-5-sonnet-latest",
+                "anthropic_base_url": "https://api.example.com/v1",
+                "llm_base_url_params": "api_version=2024-01&custom=value",
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
+        model = get_anthropic_model()
+        assert model is not None
+
+    @patch("src.agents.providers.get_settings")
+    @patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"})
+    def test_google_model_with_url_params_warning(self, mock_get_settings):
+        """Test Google model creation with URL parameters logs warning"""
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "google_api_key": "test-key",
+                "gemini_model_name": "gemini-2.5-pro",
+                "google_base_url": None,
+                "llm_base_url_params": "api_version=2024-01&custom=value",
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
+        with patch("src.agents.providers.logger") as mock_logger:
+            model = get_google_model()
+            assert model is not None
+
+            # Check that warning was logged about unsupported parameters
+            mock_logger.warning.assert_called()
+            warning_calls = [
+                call.args[0] for call in mock_logger.warning.call_args_list
+            ]
+            assert any("LLM_BASE_URL_PARAMS setting" in call for call in warning_calls)
+
+    @patch("src.agents.providers.get_settings")
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"})
+    def test_openai_model_without_base_url_ignores_params(self, mock_get_settings):
+        """Test that parameters are ignored when no base URL is set"""
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "openai_api_key": "test-key",
+                "openai_model_name": "gpt-4o",
+                "openai_base_url": None,
+                "llm_base_url_params": "api_version=2024-01&custom=value",
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
+        # Should create model successfully without base URL
+        model = get_openai_model()
+        assert model is not None
+
+    @patch("src.agents.providers.get_settings")
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_anthropic_model_without_base_url_ignores_params(self, mock_get_settings):
+        """Test that parameters are ignored when no base URL is set"""
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "anthropic_api_key": "test-key",
+                "anthropic_model_name": "claude-3-5-sonnet-latest",
+                "anthropic_base_url": None,
+                "llm_base_url_params": "api_version=2024-01&custom=value",
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
+        # Should create model successfully without base URL
+        model = get_anthropic_model()
+        assert model is not None
+
+    @patch("src.agents.providers.get_settings")
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"})
+    def test_openai_model_logging_with_params(self, mock_get_settings):
+        """Test that OpenAI model logs correct message with parameters"""
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "openai_api_key": "test-key",
+                "openai_model_name": "gpt-4o",
+                "openai_base_url": "https://api.example.com/v1",
+                "llm_base_url_params": "api_version=2024-01",
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
+        with patch("src.agents.providers.logger") as mock_logger:
+            model = get_openai_model()
+            assert model is not None
+
+            # Check that info message was logged with parameters
+            mock_logger.info.assert_called()
+            info_calls = [call.args[0] for call in mock_logger.info.call_args_list]
+            assert any("with parameters" in call for call in info_calls)
+
+    @patch("src.agents.providers.get_settings")
+    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
+    def test_anthropic_model_logging_with_params(self, mock_get_settings):
+        """Test that Anthropic model logs correct message with parameters"""
+        mock_settings = type(
+            "Settings",
+            (),
+            {
+                "anthropic_api_key": "test-key",
+                "anthropic_model_name": "claude-3-5-sonnet-latest",
+                "anthropic_base_url": "https://api.example.com/v1",
+                "llm_base_url_params": "api_version=2024-01",
+            },
+        )()
+        mock_get_settings.return_value = mock_settings
+
+        with patch("src.agents.providers.logger") as mock_logger:
+            model = get_anthropic_model()
+            assert model is not None
+
+            # Check that info message was logged with parameters
+            mock_logger.info.assert_called()
+            info_calls = [call.args[0] for call in mock_logger.info.call_args_list]
+            assert any("with parameters" in call for call in info_calls)
