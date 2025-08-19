@@ -4,9 +4,10 @@ Multi-LLM provider configuration for PydanticAI
 
 import logging
 import os
-from typing import List, Optional, Union
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from typing import Dict, List, Optional, Union
+from urllib.parse import parse_qsl
 
+import httpx
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 from pydantic_ai.models import Model
@@ -24,51 +25,26 @@ from src.exceptions import AIProviderException, ConfigurationException
 logger = logging.getLogger(__name__)
 
 
-def _append_url_params(base_url: str, params: str) -> str:
+def _parse_url_params(params: str) -> Dict[str, str]:
     """
-    Append URL parameters to a base URL
+    Parse URL parameters string into a dictionary
 
     Args:
-        base_url: The base URL to append parameters to
         params: URL-encoded query parameters string (e.g., "api_version=2024-01&custom=value")
 
     Returns:
-        URL with appended parameters
+        Dictionary of parsed parameters
 
     Example:
-        _append_url_params("https://api.example.com/v1", "version=2024&key=value")
-        -> "https://api.example.com/v1?version=2024&key=value"
+        _parse_url_params("version=2024&key=value")
+        -> {"version": "2024", "key": "value"}
     """
     if not params or not params.strip():
-        return base_url
+        return {}
 
-    # Parse the base URL
-    parsed = urlparse(base_url)
-
-    # Parse existing query parameters
-    existing_params = parse_qsl(parsed.query, keep_blank_values=True)
-
-    # Parse new parameters from the params string
-    new_params = parse_qsl(params, keep_blank_values=True)
-
-    # Combine parameters (new parameters override existing ones with same key)
-    combined_params = dict(existing_params)
-    combined_params.update(dict(new_params))
-
-    # Encode the combined parameters
-    new_query = urlencode(sorted(combined_params.items()))
-
-    # Reconstruct the URL
-    return urlunparse(
-        (
-            parsed.scheme,
-            parsed.netloc,
-            parsed.path,
-            parsed.params,
-            new_query,
-            parsed.fragment,
-        )
-    )
+    # Parse parameters from the params string
+    parsed_params = parse_qsl(params, keep_blank_values=True)
+    return dict(parsed_params)
 
 
 def get_openai_model() -> OpenAIModel:
@@ -77,13 +53,6 @@ def get_openai_model() -> OpenAIModel:
         settings = get_settings()
         # Determine base URL (from settings or environment variable)
         base_url = settings.openai_base_url or os.getenv("OPENAI_BASE_URL")
-
-        # Append URL parameters if both base_url and parameters are provided
-        if base_url and settings.llm_base_url_params:
-            base_url = _append_url_params(base_url, settings.llm_base_url_params)
-            logger.info(f"Using custom OpenAI base URL with parameters: {base_url}")
-        elif base_url:
-            logger.info(f"Using custom OpenAI base URL: {base_url}")
 
         # Get API key from settings or environment
         api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
@@ -97,7 +66,22 @@ def get_openai_model() -> OpenAIModel:
 
         # Create custom client if base URL is provided
         if base_url:
-            client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+            # Parse URL parameters if provided
+            url_params = _parse_url_params(settings.llm_base_url_params or "")
+
+            if url_params:
+                # Create httpx client with default query parameters
+                http_client = httpx.AsyncClient(params=url_params)
+                client = AsyncOpenAI(
+                    api_key=api_key, base_url=base_url, http_client=http_client
+                )
+                logger.info(
+                    f"Using custom OpenAI base URL: {base_url} with parameters: {url_params}"
+                )
+            else:
+                client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+                logger.info(f"Using custom OpenAI base URL: {base_url}")
+
             provider = OpenAIProvider(openai_client=client)
             return OpenAIModel(settings.openai_model_name, provider=provider)
 
@@ -121,13 +105,6 @@ def get_anthropic_model() -> AnthropicModel:
         # Determine base URL (from settings or environment variable)
         base_url = settings.anthropic_base_url or os.getenv("ANTHROPIC_BASE_URL")
 
-        # Append URL parameters if both base_url and parameters are provided
-        if base_url and settings.llm_base_url_params:
-            base_url = _append_url_params(base_url, settings.llm_base_url_params)
-            logger.info(f"Using custom Anthropic base URL with parameters: {base_url}")
-        elif base_url:
-            logger.info(f"Using custom Anthropic base URL: {base_url}")
-
         # Get API key from settings or environment
         api_key = settings.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
 
@@ -140,7 +117,22 @@ def get_anthropic_model() -> AnthropicModel:
 
         # Create custom client if base URL is provided
         if base_url:
-            client = AsyncAnthropic(api_key=api_key, base_url=base_url)
+            # Parse URL parameters if provided
+            url_params = _parse_url_params(settings.llm_base_url_params or "")
+
+            if url_params:
+                # Create httpx client with default query parameters
+                http_client = httpx.AsyncClient(params=url_params)
+                client = AsyncAnthropic(
+                    api_key=api_key, base_url=base_url, http_client=http_client
+                )
+                logger.info(
+                    f"Using custom Anthropic base URL: {base_url} with parameters: {url_params}"
+                )
+            else:
+                client = AsyncAnthropic(api_key=api_key, base_url=base_url)
+                logger.info(f"Using custom Anthropic base URL: {base_url}")
+
             provider = AnthropicProvider(anthropic_client=client)
             return AnthropicModel(settings.anthropic_model_name, provider=provider)
 

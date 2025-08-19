@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from src.agents.providers import (
-    _append_url_params,
+    _parse_url_params,
     get_anthropic_model,
     get_google_model,
     get_llm_model,
@@ -371,74 +371,47 @@ class TestProviderIntegration:
 class TestURLParameterUtility:
     """Test the URL parameter utility function"""
 
-    def test_append_url_params_to_base_url_without_query(self):
-        """Test appending parameters to URL without existing query parameters"""
-        result = _append_url_params(
-            "https://api.example.com/v1", "key=value&version=2024"
-        )
-        assert result == "https://api.example.com/v1?key=value&version=2024"
+    def test_parse_url_params_simple(self):
+        """Test parsing simple parameters"""
+        result = _parse_url_params("key=value&version=2024")
+        assert result == {"key": "value", "version": "2024"}
 
-    def test_append_url_params_to_base_url_with_existing_query(self):
-        """Test appending parameters to URL with existing query parameters"""
-        result = _append_url_params(
-            "https://api.example.com/v1?existing=param", "key=value&version=2024"
-        )
-        assert (
-            result == "https://api.example.com/v1?existing=param&key=value&version=2024"
-        )
+    def test_parse_url_params_with_spaces(self):
+        """Test parsing parameters with spaces"""
+        result = _parse_url_params("key=value+with+spaces&special=test")
+        assert result["key"] == "value with spaces"
+        assert result["special"] == "test"
 
-    def test_append_url_params_with_override(self):
-        """Test that new parameters override existing ones with same key"""
-        result = _append_url_params(
-            "https://api.example.com/v1?key=old", "key=new&version=2024"
-        )
-        assert result == "https://api.example.com/v1?key=new&version=2024"
+    def test_parse_url_params_with_empty_values(self):
+        """Test parsing parameters with empty values"""
+        result = _parse_url_params("key=&version=2024")
+        assert result == {"key": "", "version": "2024"}
 
-    def test_append_url_params_with_empty_params(self):
-        """Test appending empty parameters string"""
-        base_url = "https://api.example.com/v1"
-        result = _append_url_params(base_url, "")
-        assert result == base_url
+    def test_parse_url_params_with_empty_string(self):
+        """Test parsing empty parameters string"""
+        result = _parse_url_params("")
+        assert result == {}
 
-    def test_append_url_params_with_none_params(self):
-        """Test appending None parameters"""
-        base_url = "https://api.example.com/v1"
-        result = _append_url_params(base_url, None)
-        assert result == base_url
+    def test_parse_url_params_with_none(self):
+        """Test parsing None parameters"""
+        result = _parse_url_params(None)
+        assert result == {}
 
-    def test_append_url_params_with_whitespace_params(self):
-        """Test appending whitespace-only parameters"""
-        base_url = "https://api.example.com/v1"
-        result = _append_url_params(base_url, "   ")
-        assert result == base_url
+    def test_parse_url_params_with_whitespace(self):
+        """Test parsing whitespace-only parameters"""
+        result = _parse_url_params("   ")
+        assert result == {}
 
-    def test_append_url_params_with_complex_url(self):
-        """Test with complex URL including path, query, and fragment"""
-        base_url = "https://api.example.com/v1/endpoint?existing=param#fragment"
-        result = _append_url_params(base_url, "key=value")
-        assert (
-            result
-            == "https://api.example.com/v1/endpoint?existing=param&key=value#fragment"
-        )
+    def test_parse_url_params_single_param(self):
+        """Test parsing single parameter"""
+        result = _parse_url_params("api_version=2024-01")
+        assert result == {"api_version": "2024-01"}
 
-    def test_append_url_params_url_encoding(self):
-        """Test that parameters are properly URL encoded"""
-        result = _append_url_params(
-            "https://api.example.com/v1", "key=value with spaces&special=!@#$"
-        )
-        # Parameters should be properly encoded and sorted
-        assert (
-            "key=value+with+spaces" in result or "key=value%20with%20spaces" in result
-        )
+    def test_parse_url_params_special_characters(self):
+        """Test parsing parameters with special characters"""
+        result = _parse_url_params("special=%21%40%23%24&normal=test")
         assert "special" in result
-
-    def test_append_url_params_sorted_output(self):
-        """Test that parameters are sorted in the output"""
-        result = _append_url_params(
-            "https://api.example.com/v1", "zebra=last&alpha=first"
-        )
-        # Parameters should be sorted alphabetically
-        assert result == "https://api.example.com/v1?alpha=first&zebra=last"
+        assert result["normal"] == "test"
 
 
 class TestURLParameterIntegration:
@@ -460,8 +433,24 @@ class TestURLParameterIntegration:
         )()
         mock_get_settings.return_value = mock_settings
 
-        model = get_openai_model()
-        assert model is not None
+        with patch(
+            "src.agents.providers.httpx.AsyncClient"
+        ) as mock_httpx_client, patch(
+            "src.agents.providers.AsyncOpenAI"
+        ) as mock_openai:
+            model = get_openai_model()
+            assert model is not None
+
+            # Verify that httpx.AsyncClient was called with params
+            mock_httpx_client.assert_called_once_with(
+                params={"api_version": "2024-01", "custom": "value"}
+            )
+            # Verify AsyncOpenAI was called with the mock http_client
+            mock_openai.assert_called_once_with(
+                api_key="test-key",
+                base_url="https://api.example.com/v1",
+                http_client=mock_httpx_client.return_value,
+            )
 
     @patch("src.agents.providers.get_settings")
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -479,8 +468,24 @@ class TestURLParameterIntegration:
         )()
         mock_get_settings.return_value = mock_settings
 
-        model = get_anthropic_model()
-        assert model is not None
+        with patch(
+            "src.agents.providers.httpx.AsyncClient"
+        ) as mock_httpx_client, patch(
+            "src.agents.providers.AsyncAnthropic"
+        ) as mock_anthropic:
+            model = get_anthropic_model()
+            assert model is not None
+
+            # Verify that httpx.AsyncClient was called with params
+            mock_httpx_client.assert_called_once_with(
+                params={"api_version": "2024-01", "custom": "value"}
+            )
+            # Verify AsyncAnthropic was called with the mock http_client
+            mock_anthropic.assert_called_once_with(
+                api_key="test-key",
+                base_url="https://api.example.com/v1",
+                http_client=mock_httpx_client.return_value,
+            )
 
     @patch("src.agents.providers.get_settings")
     @patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"})
@@ -565,7 +570,9 @@ class TestURLParameterIntegration:
         )()
         mock_get_settings.return_value = mock_settings
 
-        with patch("src.agents.providers.logger") as mock_logger:
+        with patch("src.agents.providers.httpx.AsyncClient"), patch(
+            "src.agents.providers.AsyncOpenAI"
+        ), patch("src.agents.providers.logger") as mock_logger:
             model = get_openai_model()
             assert model is not None
 
@@ -590,7 +597,9 @@ class TestURLParameterIntegration:
         )()
         mock_get_settings.return_value = mock_settings
 
-        with patch("src.agents.providers.logger") as mock_logger:
+        with patch("src.agents.providers.httpx.AsyncClient"), patch(
+            "src.agents.providers.AsyncAnthropic"
+        ), patch("src.agents.providers.logger") as mock_logger:
             model = get_anthropic_model()
             assert model is not None
 
